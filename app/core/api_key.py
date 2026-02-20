@@ -1,4 +1,7 @@
-"""API key resolution and SDK device-code provisioning via Supabase."""
+"""
+Supabase helpers: API key resolution, user management, log storage,
+summary storage, and SDK device-code provisioning.
+"""
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -36,6 +39,10 @@ def _parse_utc(value: str) -> datetime:
     return datetime.fromisoformat(normalized)
 
 
+# ============================================================
+# Key generation
+# ============================================================
+
 def generate_api_key() -> str:
     return f"sk_{secrets.token_urlsafe(24)}"
 
@@ -49,6 +56,38 @@ def generate_user_code() -> str:
     return f"{raw[:4]}-{raw[4:]}"
 
 
+# ============================================================
+# Users
+# ============================================================
+
+def upsert_user(user_id: str, email: str, name: Optional[str], image: Optional[str]) -> bool:
+    """
+    Upsert a user row. Called by POST /users/sync after Google OAuth.
+    user_id is the Google sub (string, not UUID).
+    """
+    client = _get_supabase()
+    if not client:
+        return False
+    try:
+        client.table("users").upsert(
+            {
+                "id": user_id,
+                "email": email,
+                "name": name,
+                "image": image,
+                "updated_at": _now_utc().isoformat(),
+            },
+            on_conflict="id",
+        ).execute()
+        return True
+    except Exception:
+        return False
+
+
+# ============================================================
+# Apps
+# ============================================================
+
 def resolve_api_key_to_app_id(api_key: str) -> Optional[str]:
     """
     Look up app_id from api_key in Supabase apps table.
@@ -58,7 +97,13 @@ def resolve_api_key_to_app_id(api_key: str) -> Optional[str]:
     if not client:
         return None
     try:
-        result = client.table("apps").select("id").eq("api_key", api_key).limit(1).execute()
+        result = (
+            client.table("apps")
+            .select("id")
+            .eq("api_key", api_key)
+            .limit(1)
+            .execute()
+        )
         if result.data and len(result.data) > 0:
             return str(result.data[0]["id"])
     except Exception:
@@ -66,7 +111,165 @@ def resolve_api_key_to_app_id(api_key: str) -> Optional[str]:
     return None
 
 
-def start_device_session(app_name: str, description: str | None, ttl_seconds: int) -> Optional[dict]:
+def verify_app_ownership(app_id: str, user_id: str) -> bool:
+    """Return True if the app belongs to user_id."""
+    client = _get_supabase()
+    if not client:
+        return False
+    try:
+        result = (
+            client.table("apps")
+            .select("id")
+            .eq("id", app_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        return bool(result.data)
+    except Exception:
+        return False
+
+
+# ============================================================
+# Logs
+# ============================================================
+
+def bulk_insert_logs(parsed_logs: list[dict]) -> int:
+    """
+    Bulk insert a list of parsed log dicts into the logs table.
+    Returns the count of inserted rows.
+    """
+    client = _get_supabase()
+    if not client or not parsed_logs:
+        return 0
+    try:
+        result = client.table("logs").insert(parsed_logs).execute()
+        return len(result.data) if result.data else 0
+    except Exception:
+        return 0
+
+
+def get_logs_paginated(
+    app_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    level: Optional[str] = None,
+    service: Optional[str] = None,
+) -> list[dict]:
+    """Return paginated logs for an app, newest first."""
+    client = _get_supabase()
+    if not client:
+        return []
+    try:
+        query = (
+            client.table("logs")
+            .select("id,level,message,service,raw,logged_at")
+            .eq("app_id", app_id)
+            .order("logged_at", desc=True)
+            .limit(limit)
+            .offset(offset)
+        )
+        if level:
+            query = query.eq("level", level.upper())
+        if service:
+            query = query.eq("service", service)
+        result = query.execute()
+        return result.data or []
+    except Exception:
+        return []
+
+
+def get_analytics(app_id: str) -> dict:
+    """
+    Compute basic analytics from the logs table.
+    Returns totals, per-level counts, error rate, and last log time.
+    """
+    client = _get_supabase()
+    if not client:
+        return {"total": 0, "by_level": {}, "error_rate": 0.0}
+    try:
+        result = (
+            client.table("logs")
+            .select("level,logged_at")
+            .eq("app_id", app_id)
+            .order("logged_at", desc=True)
+            .limit(10000)
+            .execute()
+        )
+        records = result.data or []
+        if not records:
+            return {"total": 0, "by_level": {}, "error_rate": 0.0}
+
+        total = len(records)
+        by_level: dict[str, int] = {}
+        for r in records:
+            lvl = (r.get("level") or "UNKNOWN").upper()
+            by_level[lvl] = by_level.get(lvl, 0) + 1
+
+        error_count = by_level.get("ERROR", 0) + by_level.get("CRITICAL", 0)
+        warning_count = by_level.get("WARNING", 0)
+
+        return {
+            "total": total,
+            "by_level": by_level,
+            "error_rate": round(error_count / total, 4) if total else 0.0,
+            "warning_rate": round(warning_count / total, 4) if total else 0.0,
+            "last_log_time": records[0]["logged_at"] if records else None,
+        }
+    except Exception:
+        return {"total": 0, "by_level": {}, "error_rate": 0.0}
+
+
+# ============================================================
+# Summaries
+# ============================================================
+
+def store_summary(app_id: str, summary: dict) -> bool:
+    """Upsert the latest dashboard summary for an app."""
+    client = _get_supabase()
+    if not client:
+        return False
+    try:
+        client.table("summaries").upsert(
+            {
+                "app_id": app_id,
+                "summary": summary,
+                "updated_at": _now_utc().isoformat(),
+            },
+            on_conflict="app_id",
+        ).execute()
+        return True
+    except Exception:
+        return False
+
+
+def get_summary_from_db(app_id: str) -> Optional[dict]:
+    """Return the latest summary for an app, or None."""
+    client = _get_supabase()
+    if not client:
+        return None
+    try:
+        result = (
+            client.table("summaries")
+            .select("summary")
+            .eq("app_id", app_id)
+            .single()
+            .execute()
+        )
+        if result.data:
+            return result.data.get("summary")
+    except Exception:
+        pass
+    return None
+
+
+# ============================================================
+# SDK Device Sessions
+# ============================================================
+
+def start_device_session(
+    app_name: str, description: Optional[str], ttl_seconds: int
+) -> Optional[dict]:
     """
     Create a pending SDK onboarding session.
     Returns {'device_code', 'user_code', 'expires_at'} or None.
@@ -89,9 +292,13 @@ def start_device_session(app_name: str, description: str | None, ttl_seconds: in
         "created_at": _now_utc().isoformat(),
     }
     try:
-        result = client.table("sdk_device_sessions").insert(payload).select(
-            "device_code,user_code,expires_at"
-        ).single().execute()
+        result = (
+            client.table("sdk_device_sessions")
+            .insert(payload)
+            .select("device_code,user_code,expires_at")
+            .single()
+            .execute()
+        )
         return result.data if result.data else None
     except Exception:
         return None
@@ -131,10 +338,10 @@ def mark_device_session_expired(device_code: str) -> None:
 def complete_device_session(
     device_code: str,
     user_id: str,
-    app_name_override: str | None = None,
+    app_name_override: Optional[str] = None,
 ) -> Optional[dict]:
     """
-    Complete onboarding by creating app + api key and storing it on the device session.
+    Complete onboarding: create app + api_key, store on device session.
     Returns {'app_id', 'api_key', 'app_name'} or None.
     """
     client = _get_supabase()
@@ -191,21 +398,22 @@ def complete_device_session(
         return None
 
 
+# ============================================================
+# Alert helpers
+# ============================================================
+
 def get_alert_recipient_emails(app_id: str) -> list[str]:
-    """
-    Resolve default alert recipients from the app owner.
-    Attempts users.email, then profiles.email.
-    """
+    """Resolve default alert recipient email from the app owner's users row."""
     client = _get_supabase()
     if not client:
         return []
-    user_id = None
     try:
-        app_result = client.table("apps").select("user_id").eq("id", app_id).single().execute()
+        app_result = (
+            client.table("apps").select("user_id").eq("id", app_id).single().execute()
+        )
         user_id = app_result.data.get("user_id") if app_result.data else None
         if not user_id:
             return []
-
         users_result = (
             client.table("users").select("email").eq("id", user_id).limit(1).execute()
         )
@@ -213,19 +421,12 @@ def get_alert_recipient_emails(app_id: str) -> list[str]:
             return [users_result.data[0]["email"]]
     except Exception:
         pass
-
-    try:
-        if not user_id:
-            return []
-        profiles_result = (
-            client.table("profiles").select("email").eq("id", user_id).limit(1).execute()
-        )
-        if profiles_result.data and profiles_result.data[0].get("email"):
-            return [profiles_result.data[0]["email"]]
-    except Exception:
-        pass
     return []
 
+
+# ============================================================
+# Schema validation (startup probe)
+# ============================================================
 
 def _probe_table_columns(table: str, columns: list[str]) -> dict:
     client = _get_supabase()
@@ -249,43 +450,29 @@ def _probe_table_columns(table: str, columns: list[str]) -> dict:
 
 
 def validate_sdk_schema() -> dict:
-    """
-    Probe required tables/columns and detect default email source for alerts.
-    """
+    """Probe required tables/columns and report status."""
     checks = {
-        "apps_required": _probe_table_columns("apps", ["id", "user_id", "name", "api_key"]),
-        "sdk_device_sessions_required": _probe_table_columns(
+        "users": _probe_table_columns("users", ["id", "email"]),
+        "apps": _probe_table_columns("apps", ["id", "user_id", "name", "api_key"]),
+        "logs": _probe_table_columns("logs", ["id", "app_id", "level", "message"]),
+        "summaries": _probe_table_columns("summaries", ["app_id", "summary"]),
+        "sdk_device_sessions": _probe_table_columns(
             "sdk_device_sessions",
             ["device_code", "status", "app_name", "expires_at", "user_id", "app_id", "api_key"],
         ),
-        "users_email_optional": _probe_table_columns("users", ["id", "email"]),
-        "profiles_email_optional": _probe_table_columns("profiles", ["id", "email"]),
     }
 
-    users_ok = bool(checks["users_email_optional"]["ok"])
-    profiles_ok = bool(checks["profiles_email_optional"]["ok"])
-    if users_ok:
-        email_source = "users.email"
-    elif profiles_ok:
-        email_source = "profiles.email"
-    else:
-        email_source = None
-
-    required_ok = bool(checks["apps_required"]["ok"] and checks["sdk_device_sessions_required"]["ok"])
-    overall_ok = bool(required_ok and email_source is not None)
-
+    all_ok = all(v["ok"] for v in checks.values())
     guidance: list[str] = []
-    if not checks["apps_required"]["ok"]:
-        guidance.append("Run apps migration with api_key column and required fields.")
-    if not checks["sdk_device_sessions_required"]["ok"]:
-        guidance.append("Run sdk_device_sessions migration.")
-    if email_source is None:
-        guidance.append("Add email to users or profiles table for default alert recipients.")
+    for table, result in checks.items():
+        if not result["ok"]:
+            guidance.append(f"Table '{table}' is missing or incomplete: {result.get('error', '')}")
+
+    if not all_ok and not guidance:
+        guidance.append("Run the migration in supabase/migrations/20260220000000_full_schema.sql")
 
     return {
-        "ok": overall_ok,
-        "required_ok": required_ok,
-        "email_source": email_source,
+        "ok": all_ok,
         "checks": checks,
         "guidance": guidance,
     }
