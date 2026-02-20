@@ -59,7 +59,7 @@ SMTP_USE_TLS = os.environ.get("SMTP_USE_TLS", "true").lower() in {"1", "true", "
 SDK_VERIFICATION_BASE_URL = os.environ.get(
     "SDK_VERIFICATION_BASE_URL", "http://localhost:3000"
 ).rstrip("/")
-SDK_DEFAULT_DSN = os.environ.get("SDK_DEFAULT_DSN", "http://localhost:8001").rstrip("/")
+SDK_DEFAULT_DSN = os.environ.get("SDK_DEFAULT_DSN", "http://localhost:9000").rstrip("/")
 SDK_SCHEMA_STRICT_STARTUP = os.environ.get("SDK_SCHEMA_STRICT_STARTUP", "false").lower() in {
     "1",
     "true",
