@@ -43,7 +43,7 @@ ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "http://localhost:3000,https://sentrylabs.live",
+        "http://localhost:3000,http://localhost:3001,https://sentrylabs.live,https://www.sentrylabs.live",
     ).split(",")
     if o.strip()
 ]
