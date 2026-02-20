@@ -1,0 +1,44 @@
+{
+  "services": [
+    "NotificationService"
+  ],
+  "total_services": 1,
+  "service_health": {
+    "NotificationService": "healthy"
+  },
+  "severity_distribution": {
+    "NotificationService": {
+      "Low": 1
+    }
+  },
+  "most_common_errors": {
+    "NotificationService": "Communication Error"
+  },
+  "recent_errors": {
+    "NotificationService": [
+      {
+        "timestamp": "2025-10-21 10:34:01,860",
+        "service": "NotificationService",
+        "error_type": "Communication Error",
+        "severity_level": "Low",
+        "line": "2025-10-21 10:34:01,860 [INFO] [NotificationService]: Preparing email notification NOTIF-33175 for user 5147",
+        "line_number": 1
+      }
+    ]
+  },
+  "first_error_timestamp": {
+    "NotificationService": "2025-10-21 10:34:01,860"
+  },
+  "latest_error_timestamp": {
+    "NotificationService": "2025-10-21 10:34:01,860"
+  },
+  "error_types": {
+    "NotificationService": [
+      "Communication Error"
+    ]
+  },
+  "errors_per_10_logs": [
+    0.0
+  ],
+  "avg_errors_per_10_logs": 0
+}

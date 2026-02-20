@@ -1,0 +1,105 @@
+{
+  "services": [
+    "NotificationService",
+    "InventoryService",
+    "ApiService"
+  ],
+  "total_services": 3,
+  "service_health": {
+    "NotificationService": "warning",
+    "InventoryService": "warning",
+    "ApiService": "warning"
+  },
+  "severity_distribution": {
+    "NotificationService": {
+      "High": 1,
+      "Low": 1
+    },
+    "InventoryService": {
+      "High": 1,
+      "Low": 1
+    },
+    "ApiService": {
+      "Low": 1
+    }
+  },
+  "most_common_errors": {
+    "NotificationService": "Communication Error",
+    "InventoryService": "Network Error",
+    "ApiService": "Communication Error"
+  },
+  "recent_errors": {
+    "NotificationService": [
+      {
+        "timestamp": "2025-10-20 18:31:41,139",
+        "service": "NotificationService",
+        "error_type": "Communication Error",
+        "severity_level": "High",
+        "line": "2025-10-20 18:31:41,139 [ERROR] [NotificationService]: Sms notification NOTIF-48564 delivery failed",
+        "line_number": 1
+      },
+      {
+        "timestamp": "2025-10-20 18:31:41,140",
+        "service": "NotificationService",
+        "error_type": "Communication Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 18:31:41,140 [WARNING] [NotificationService]: SMS delivery failed to user 4263: invalid number",
+        "line_number": 2
+      }
+    ],
+    "InventoryService": [
+      {
+        "timestamp": "2025-10-20 18:31:41,490",
+        "service": "InventoryService",
+        "error_type": "Network Error",
+        "severity_level": "High",
+        "line": "2025-10-20 18:31:41,490 [ERROR] [InventoryService]: Inventory sync failed for Phone in CHI-3",
+        "line_number": 3
+      },
+      {
+        "timestamp": "2025-10-20 18:31:41,491",
+        "service": "InventoryService",
+        "error_type": "Database Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 18:31:41,491 [WARNING] [InventoryService]: Retry 2 of 3 for inventory sync",
+        "line_number": 4
+      }
+    ],
+    "ApiService": [
+      {
+        "timestamp": "2025-10-20 18:31:41,604",
+        "service": "ApiService",
+        "error_type": "Communication Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 18:31:41,604 [WARNING] [ApiService]: API PUT /users - Request 54728 failed with 404",
+        "line_number": 5
+      }
+    ]
+  },
+  "first_error_timestamp": {
+    "NotificationService": "2025-10-20 18:31:41,139",
+    "InventoryService": "2025-10-20 18:31:41,490",
+    "ApiService": "2025-10-20 18:31:41,604"
+  },
+  "latest_error_timestamp": {
+    "NotificationService": "2025-10-20 18:31:41,140",
+    "InventoryService": "2025-10-20 18:31:41,491",
+    "ApiService": "2025-10-20 18:31:41,604"
+  },
+  "error_types": {
+    "NotificationService": [
+      "Communication Error"
+    ],
+    "InventoryService": [
+      "Database Error",
+      "Network Error"
+    ],
+    "ApiService": [
+      "Communication Error"
+    ]
+  },
+  "errors_per_10_logs": [
+    2
+  ],
+  "avg_errors_per_10_logs": 0
+}

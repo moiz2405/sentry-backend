@@ -1,0 +1,43 @@
+{
+  "grouped": {
+    "PaymentService": [
+      {
+        "timestamp": "2025-10-22 11:02:36,624",
+        "service": "PaymentService",
+        "error_type": "Database Error",
+        "severity_level": "High",
+        "line": "2025-10-22 11:02:36,624 [ERROR] [PaymentService]: Database connection failed during payment processing",
+        "line_number": 1
+      }
+    ],
+    "InventoryService": [
+      {
+        "timestamp": "2025-10-22 11:02:39,945",
+        "service": "InventoryService",
+        "error_type": "Unknown",
+        "severity_level": "Low",
+        "line": "2025-10-22 11:02:39,945 [INFO] [InventoryService]: Inventory check OK for Monitor, available: 100 units",
+        "line_number": 2
+      },
+      {
+        "timestamp": "2025-10-22 11:02:48,101",
+        "service": "InventoryService",
+        "error_type": "Unknown",
+        "severity_level": "Low",
+        "line": "2025-10-22 11:02:48,101 [INFO] [InventoryService]: Stock removed: 10 units of Laptop due to damage",
+        "line_number": 4
+      }
+    ],
+    "AuthService": [
+      {
+        "timestamp": "2025-10-22 11:02:40,367",
+        "service": "AuthService",
+        "error_type": "Unknown",
+        "severity_level": "Medium",
+        "line": "2025-10-22 11:02:40,367 [WARNING] [AuthService]: Expired token used by user user_367",
+        "line_number": 3
+      }
+    ]
+  },
+  "summaries": {}
+}

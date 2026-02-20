@@ -1,0 +1,162 @@
+{
+  "1": {
+    "timestamp": "2025-10-22 10:23:49,503",
+    "service": "NotificationService",
+    "error_type": "Network Error",
+    "severity_level": "High",
+    "line": "2025-10-22 10:23:49,503 [INFO] [NotificationService]: Sending webhook notification for event: security alert",
+    "line_number": 1
+  },
+  "2": {
+    "timestamp": "2025-10-22 10:23:49,504",
+    "service": "NotificationService",
+    "error_type": "Unknown",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:49,504 [INFO] [NotificationService]: Webhook notification NOTIF-30247 sent to https://api.external-47.com/webhook",
+    "line_number": 2
+  },
+  "3": {
+    "timestamp": "2025-10-22 10:23:50,141",
+    "service": "PaymentService",
+    "error_type": "Payment Error",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:50,141 [INFO] [PaymentService]: Payment initiated: TXN-985922 for order ORD-91923 - AUD 762.09",
+    "line_number": 3
+  },
+  "4": {
+    "timestamp": "2025-10-22 10:23:50,142",
+    "service": "PaymentService",
+    "error_type": "None",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:50,142 [INFO] [PaymentService]: Payment TXN-985922 successfully processed for user 8608",
+    "line_number": 4
+  },
+  "5": {
+    "timestamp": "2025-10-22 10:23:50,205",
+    "service": "InventoryService",
+    "error_type": "Unknown",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:50,205 [INFO] [InventoryService]: Stock level updated for Keyboard in LAX-2",
+    "line_number": 5
+  },
+  "6": {
+    "timestamp": "2025-10-22 10:23:50,206",
+    "service": "InventoryService",
+    "error_type": "None",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:50,206 [INFO] [InventoryService]: Inventory reconciliation completed for Peripherals category",
+    "line_number": 6
+  },
+  "7": {
+    "timestamp": "2025-10-22 10:23:50,766",
+    "service": "AuthService",
+    "error_type": "Unknown",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:50,766 [INFO] [AuthService]: User user_877 (ID: 1966) requested profile_update from 192.168.144.63",
+    "line_number": 7
+  },
+  "8": {
+    "timestamp": "2025-10-22 10:23:53,220",
+    "service": "InventoryService",
+    "error_type": "Unknown",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:53,220 [INFO] [InventoryService]: Stock removed: 45 units of Laptop due to damage",
+    "line_number": 8
+  },
+  "9": {
+    "timestamp": "2025-10-22 10:23:57,921",
+    "service": "PaymentService",
+    "error_type": "Payment Error",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:57,921 [INFO] [PaymentService]: Payment initiated: TXN-267291 for order ORD-30322 - JPY 368.77",
+    "line_number": 9
+  },
+  "10": {
+    "timestamp": "2025-10-22 10:23:57,922",
+    "service": "PaymentService",
+    "error_type": "Payment Error",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:57,922 [INFO] [PaymentService]: Processing Visa payment ending in 7613 for TXN-267291",
+    "line_number": 10
+  },
+  "11": {
+    "timestamp": "2025-10-22 10:23:57,923",
+    "service": "PaymentService",
+    "error_type": "None",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:57,923 [INFO] [PaymentService]: Payment TXN-267291 successfully processed for user 2097",
+    "line_number": 11
+  },
+  "12": {
+    "timestamp": "2025-10-22 10:23:58,379",
+    "service": "AuthService",
+    "error_type": "Unknown",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:58,379 [INFO] [AuthService]: User user_752 (ID: 1353) requested two_factor_auth from 192.168.44.133",
+    "line_number": 12
+  },
+  "13": {
+    "timestamp": "2025-10-22 10:23:58,380",
+    "service": "AuthService",
+    "error_type": "None",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:58,380 [INFO] [AuthService]: 2FA verification successful for user user_752",
+    "line_number": 13
+  },
+  "14": {
+    "timestamp": "2025-10-22 10:23:59,378",
+    "service": "ApiService",
+    "error_type": "None",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:59,378 [INFO] [ApiService]: API DELETE /categories - Request 50066 handled successfully from 192.168.156.55",
+    "line_number": 14
+  },
+  "15": {
+    "timestamp": "2025-10-22 10:23:59,379",
+    "service": "ApiService",
+    "error_type": "Unknown",
+    "severity_level": "High",
+    "line": "2025-10-22 10:23:59,379 [INFO] [ApiService]: Cache hit for API request 50066 on /categories",
+    "line_number": 15
+  },
+  "16": {
+    "timestamp": "2025-10-22 10:23:59,380",
+    "service": "ApiService",
+    "error_type": "Unknown",
+    "severity_level": "High",
+    "line": "2025-10-22 10:23:59,380 [WARNING] [ApiService]: Slow response detected: 310ms for request 50066",
+    "line_number": 16
+  },
+  "17": {
+    "timestamp": "2025-10-22 10:23:59,441",
+    "service": "NotificationService",
+    "error_type": "Unknown",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:59,441 [INFO] [NotificationService]: Preparing webhook notification NOTIF-88203 for user 8820",
+    "line_number": 17
+  },
+  "18": {
+    "timestamp": "2025-10-22 10:23:59,442",
+    "service": "NotificationService",
+    "error_type": "Unknown",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:59,442 [INFO] [NotificationService]: Sending webhook notification for event: password reset",
+    "line_number": 18
+  },
+  "19": {
+    "timestamp": "2025-10-22 10:23:59,443",
+    "service": "NotificationService",
+    "error_type": "Unknown",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:23:59,443 [INFO] [NotificationService]: Webhook notification NOTIF-88203 sent to https://api.external-40.com/webhook",
+    "line_number": 19
+  },
+  "20": {
+    "timestamp": "2025-10-22 10:24:00,659",
+    "service": "InventoryService",
+    "error_type": "Unknown",
+    "severity_level": "Low",
+    "line": "2025-10-22 10:24:00,659 [INFO] [InventoryService]: Stock level updated for Phone in NYC-1",
+    "line_number": 20
+  }
+}

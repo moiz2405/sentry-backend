@@ -1,0 +1,371 @@
+2025-07-30 08:00:01,123 INFO [auth-service] Application starting up
+2025-07-30 08:00:01,234 INFO [api-gateway] Gateway initialized on port 8080
+2025-07-30 08:00:01,345 INFO [user-service] Database connection pool created
+2025-07-30 08:00:01,456 INFO [payment-service] Payment processor initialized
+2025-07-30 08:00:01,567 INFO [notification-service] Email service connected
+2025-07-30 08:00:01,678 INFO [inventory-service] Redis cache connected
+2025-07-30 08:00:02,123 INFO [auth-service] JWT secret loaded successfully
+2025-07-30 08:00:02,234 INFO [api-gateway] Rate limiter configured: 1000 req/min
+2025-07-30 08:00:02,345 DEBUG [user-service] Database migration check completed
+2025-07-30 08:00:02,456 INFO [payment-service] Stripe webhook endpoint registered
+2025-07-30 08:00:02,567 INFO [notification-service] SMS provider configured
+2025-07-30 08:00:02,678 INFO [inventory-service] Product catalog loaded: 15,234 items
+2025-07-30 08:00:03,123 INFO [auth-service] Server ready on port 8001
+2025-07-30 08:00:03,234 INFO [api-gateway] Health check endpoints registered
+2025-07-30 08:00:03,345 INFO [user-service] Server ready on port 8002
+2025-07-30 08:00:03,456 INFO [payment-service] Server ready on port 8003
+2025-07-30 08:00:03,567 INFO [notification-service] Server ready on port 8004
+2025-07-30 08:00:03,678 INFO [inventory-service] Server ready on port 8005
+2025-07-30 08:00:05,123 INFO [api-gateway] First request received
+2025-07-30 08:00:05,234 DEBUG [auth-service] Token validation request from 192.168.1.100
+2025-07-30 08:00:05,345 INFO [user-service] User login attempt: user@example.com
+2025-07-30 08:00:05,456 DEBUG [auth-service] Password hash verification successful
+2025-07-30 08:00:05,567 INFO [auth-service] JWT token issued for user_id: 12345
+2025-07-30 08:00:05,678 INFO [user-service] User session created: session_id=abc123
+2025-07-30 08:00:06,123 INFO [api-gateway] GET /api/v1/users/profile - 200 - 45ms
+2025-07-30 08:00:07,234 DEBUG [inventory-service] Product search query: "laptop"
+2025-07-30 08:00:07,345 INFO [inventory-service] Search results: 234 products found
+2025-07-30 08:00:07,456 INFO [api-gateway] GET /api/v1/products/search - 200 - 120ms
+2025-07-30 08:00:08,567 ERROR [payment-service] Database connection failed: Connection refused
+2025-07-30 08:00:08,568 ERROR [payment-service] java.sql.SQLTransientConnectionException: Could not connect to database server
+2025-07-30 08:00:08,569 ERROR [payment-service] 	at com.payment.db.ConnectionPool.getConnection(ConnectionPool.java:45)
+2025-07-30 08:00:08,570 ERROR [payment-service] 	at com.payment.service.PaymentService.processPayment(PaymentService.java:89)
+2025-07-30 08:00:08,571 ERROR [payment-service] 	at com.payment.controller.PaymentController.createPayment(PaymentController.java:34)
+2025-07-30 08:00:08,678 WARN [api-gateway] Circuit breaker opened for payment-service
+2025-07-30 08:00:08,789 ERROR [api-gateway] POST /api/v1/payments - 503 - Service Unavailable
+2025-07-30 08:00:09,123 INFO [payment-service] Attempting database reconnection...
+2025-07-30 08:00:09,234 INFO [payment-service] Database connection restored
+2025-07-30 08:00:09,345 INFO [api-gateway] Circuit breaker closed for payment-service
+2025-07-30 08:00:10,456 DEBUG [notification-service] Email queue size: 45 pending
+2025-07-30 08:00:10,567 INFO [notification-service] Processing email batch: 10 emails
+2025-07-30 08:00:11,678 ERROR [notification-service] SMTP connection timeout
+2025-07-30 08:00:11,679 ERROR [notification-service] javax.mail.MessagingException: Could not connect to SMTP host: smtp.gmail.com, port: 587
+2025-07-30 08:00:11,680 ERROR [notification-service] 	at com.sun.mail.smtp.SMTPTransport.openServer(SMTPTransport.java:2118)
+2025-07-30 08:00:11,681 ERROR [notification-service] 	at com.sun.mail.smtp.SMTPTransport.protocolConnect(SMTPTransport.java:712)
+2025-07-30 08:00:11,789 WARN [notification-service] Email delivery failed, retrying in 30 seconds
+2025-07-30 08:00:12,123 DEBUG [user-service] Cache miss for user_id: 67890
+2025-07-30 08:00:12,234 DEBUG [user-service] Database query: SELECT * FROM users WHERE id = 67890
+2025-07-30 08:00:12,345 INFO [user-service] User profile loaded: john.doe@company.com
+2025-07-30 08:00:13,456 ERROR [auth-service] Invalid JWT token signature
+2025-07-30 08:00:13,457 ERROR [auth-service] io.jsonwebtoken.security.SignatureException: JWT signature does not match locally computed signature
+2025-07-30 08:00:13,458 ERROR [auth-service] 	at io.jsonwebtoken.impl.DefaultJwtParser.parse(DefaultJwtParser.java:258)
+2025-07-30 08:00:13,459 ERROR [auth-service] 	at com.auth.service.TokenService.validateToken(TokenService.java:67)
+2025-07-30 08:00:13,567 WARN [api-gateway] Authentication failed for request to /api/v1/secure-endpoint
+2025-07-30 08:00:13,678 ERROR [api-gateway] GET /api/v1/secure-endpoint - 401 - Unauthorized
+2025-07-30 08:00:14,789 INFO [inventory-service] Stock level warning: Product ID 1001 has only 5 units left
+2025-07-30 08:00:15,123 DEBUG [inventory-service] Updating stock for product_id: 1001, quantity: -1
+2025-07-30 08:00:15,234 INFO [inventory-service] Stock updated successfully
+2025-07-30 08:00:16,345 ERROR [payment-service] Stripe API rate limit exceeded
+2025-07-30 08:00:16,346 ERROR [payment-service] com.stripe.exception.RateLimitException: Too many requests made to the API too quickly
+2025-07-30 08:00:16,347 ERROR [payment-service] 	at com.stripe.net.StripeResponseGetter.request(StripeResponseGetter.java:208)
+2025-07-30 08:00:16,348 ERROR [payment-service] 	at com.stripe.net.APIResource.request(APIResource.java:122)
+2025-07-30 08:00:16,456 WARN [payment-service] Payment processing delayed due to rate limiting
+2025-07-30 08:00:16,567 ERROR [api-gateway] POST /api/v1/payments - 429 - Too Many Requests
+2025-07-30 08:00:17,678 INFO [user-service] Password reset request for email: jane@example.com
+2025-07-30 08:00:17,789 DEBUG [user-service] Generating password reset token
+2025-07-30 08:00:18,123 INFO [notification-service] Password reset email queued for delivery
+2025-07-30 08:00:19,234 ERROR [inventory-service] Redis connection lost
+2025-07-30 08:00:19,235 ERROR [inventory-service] redis.clients.jedis.exceptions.JedisConnectionException: Could not get a resource from the pool
+2025-07-30 08:00:19,236 ERROR [inventory-service] 	at redis.clients.jedis.util.Pool.getResource(Pool.java:53)
+2025-07-30 08:00:19,237 ERROR [inventory-service] 	at com.inventory.cache.RedisCache.get(RedisCache.java:28)
+2025-07-30 08:00:19,345 WARN [inventory-service] Falling back to database for product queries
+2025-07-30 08:00:20,456 DEBUG [inventory-service] Direct database query for product_id: 2001
+2025-07-30 08:00:20,567 INFO [inventory-service] Product data retrieved from database: Laptop Pro 15"
+2025-07-30 08:00:21,678 INFO [auth-service] User logout: user_id=12345, session_id=abc123
+2025-07-30 08:00:21,789 DEBUG [auth-service] JWT token blacklisted: jti=xyz789
+2025-07-30 08:00:22,123 INFO [user-service] Session terminated: session_id=abc123
+2025-07-30 08:00:23,234 ERROR [api-gateway] Health check failed for notification-service
+2025-07-30 08:00:23,235 ERROR [api-gateway] java.net.ConnectException: Connection refused (Connection refused)
+2025-07-30 08:00:23,236 ERROR [api-gateway] 	at java.net.PlainSocketImpl.socketConnect(Native Method)
+2025-07-30 08:00:23,237 ERROR [api-gateway] 	at java.net.AbstractPlainSocketImpl.doConnect(AbstractPlainSocketImpl.java:350)
+2025-07-30 08:00:23,345 WARN [api-gateway] Marking notification-service as unhealthy
+2025-07-30 08:00:24,456 INFO [notification-service] Service health check endpoint responding normally
+2025-07-30 08:00:24,567 INFO [api-gateway] notification-service health restored
+2025-07-30 08:00:25,678 DEBUG [payment-service] Processing refund request: payment_id=pay_123456
+2025-07-30 08:00:25,789 INFO [payment-service] Refund initiated: amount=$49.99, payment_id=pay_123456
+2025-07-30 08:00:26,123 INFO [notification-service] Refund confirmation email sent
+2025-07-30 08:00:27,234 FATAL [inventory-service] Out of memory error detected
+2025-07-30 08:00:27,235 FATAL [inventory-service] java.lang.OutOfMemoryError: Java heap space
+2025-07-30 08:00:27,236 FATAL [inventory-service] 	at java.util.Arrays.copyOf(Arrays.java:3210)
+2025-07-30 08:00:27,237 FATAL [inventory-service] 	at java.util.ArrayList.grow(ArrayList.java:267)
+2025-07-30 08:00:27,238 FATAL [inventory-service] 	at com.inventory.service.ProductCache.loadAllProducts(ProductCache.java:89)
+2025-07-30 08:00:27,345 ERROR [api-gateway] inventory-service container killed by OOMKiller
+2025-07-30 08:00:27,456 ERROR [api-gateway] GET /api/v1/products/1001 - 503 - Service Unavailable
+2025-07-30 08:00:28,567 INFO [inventory-service] Container restarting...
+2025-07-30 08:00:30,678 INFO [inventory-service] Service recovered, memory usage: 512MB/2GB
+2025-07-30 08:00:31,789 INFO [api-gateway] inventory-service back online
+2025-07-30 08:00:32,123 WARN [auth-service] Suspicious login attempt from IP: 192.168.1.200
+2025-07-30 08:00:32,234 WARN [auth-service] Multiple failed login attempts for user: admin@company.com
+2025-07-30 08:00:32,345 ERROR [auth-service] Account locked due to too many failed attempts
+2025-07-30 08:00:32,456 WARN [auth-service] Potential brute force attack detected
+2025-07-30 08:00:33,567 INFO [notification-service] Security alert email sent to administrators
+2025-07-30 08:00:34,678 DEBUG [user-service] Creating new user account: newuser@example.com
+2025-07-30 08:00:34,789 INFO [user-service] User registration successful: user_id=54321
+2025-07-30 08:00:35,123 INFO [notification-service] Welcome email queued for new user
+2025-07-30 08:00:36,234 ERROR [payment-service] SSL handshake failure with payment gateway
+2025-07-30 08:00:36,235 ERROR [payment-service] javax.net.ssl.SSLHandshakeException: sun.security.validator.ValidatorException: PKIX path building failed
+2025-07-30 08:00:36,236 ERROR [payment-service] 	at sun.security.ssl.Alerts.getSSLException(Alerts.java:192)
+2025-07-30 08:00:36,237 ERROR [payment-service] 	at sun.security.ssl.SSLSocketImpl.fatal(SSLSocketImpl.java:1946)
+2025-07-30 08:00:36,345 WARN [payment-service] Payment gateway connection failed, using backup
+2025-07-30 08:00:37,456 INFO [payment-service] Switched to backup payment processor
+2025-07-30 08:00:38,567 DEBUG [inventory-service] Batch update starting: 500 products
+2025-07-30 08:00:38,678 INFO [inventory-service] Price update batch completed successfully
+2025-07-30 08:00:39,789 ERROR [notification-service] Template rendering failed
+2025-07-30 08:00:39,790 ERROR [notification-service] org.thymeleaf.exceptions.TemplateInputException: Error resolving template "welcome-email"
+2025-07-30 08:00:39,791 ERROR [notification-service] 	at org.thymeleaf.engine.TemplateManager.resolveTemplate(TemplateManager.java:869)
+2025-07-30 08:00:39,792 ERROR [notification-service] 	at com.notification.service.EmailService.renderTemplate(EmailService.java:123)
+2025-07-30 08:00:40,123 WARN [notification-service] Using fallback email template
+2025-07-30 08:00:40,234 INFO [notification-service] Email sent using fallback template
+2025-07-30 08:00:41,345 DEBUG [auth-service] Token refresh request from user_id: 12345
+2025-07-30 08:00:41,456 INFO [auth-service] New JWT token issued, expires: 2025-07-30 16:00:41
+2025-07-30 08:00:42,567 ERROR [user-service] Database deadlock detected
+2025-07-30 08:00:42,568 ERROR [user-service] com.mysql.cj.jdbc.exceptions.MySQLTransactionRollbackException: Deadlock found when trying to get lock
+2025-07-30 08:00:42,569 ERROR [user-service] 	at com.mysql.cj.jdbc.exceptions.SQLError.createSQLException(SQLError.java:123)
+2025-07-30 08:00:42,570 ERROR [user-service] 	at com.user.service.UserService.updateProfile(UserService.java:156)
+2025-07-30 08:00:42,678 WARN [user-service] Retrying transaction after deadlock
+2025-07-30 08:00:43,789 INFO [user-service] Transaction retry successful
+2025-07-30 08:00:44,123 DEBUG [api-gateway] Request rate: 156 req/min for client IP: 192.168.1.100
+2025-07-30 08:00:45,234 WARN [api-gateway] Rate limit warning: 80% threshold reached
+2025-07-30 08:00:46,345 ERROR [inventory-service] Elasticsearch query timeout
+2025-07-30 08:00:46,346 ERROR [inventory-service] org.elasticsearch.ElasticsearchTimeoutException: java.util.concurrent.TimeoutException
+2025-07-30 08:00:46,347 ERROR [inventory-service] 	at org.elasticsearch.action.search.SearchRequest.timeout(SearchRequest.java:89)
+2025-07-30 08:00:46,348 ERROR [inventory-service] 	at com.inventory.search.ProductSearchService.search(ProductSearchService.java:67)
+2025-07-30 08:00:46,456 WARN [inventory-service] Search query fallback to SQL database
+2025-07-30 08:00:47,567 INFO [inventory-service] Search completed using database: 0.8s response time
+2025-07-30 08:00:48,678 DEBUG [payment-service] Webhook received from Stripe: payment.succeeded
+2025-07-30 08:00:48,789 INFO [payment-service] Payment confirmed: payment_id=pay_789123, amount=$99.99
+2025-07-30 08:00:49,123 INFO [notification-service] Payment confirmation email queued
+2025-07-30 08:00:50,234 ERROR [auth-service] Configuration file not found
+2025-07-30 08:00:50,235 ERROR [auth-service] java.io.FileNotFoundException: /config/oauth-providers.yml (No such file or directory)
+2025-07-30 08:00:50,236 ERROR [auth-service] 	at java.io.FileInputStream.open0(Native Method)
+2025-07-30 08:00:50,237 ERROR [auth-service] 	at com.auth.config.OAuthConfigLoader.loadConfig(OAuthConfigLoader.java:34)
+2025-07-30 08:00:50,345 WARN [auth-service] Using default OAuth configuration
+2025-07-30 08:00:51,456 INFO [auth-service] OAuth providers initialized with defaults
+2025-07-30 08:00:52,567 DEBUG [user-service] Cache warming started
+2025-07-30 08:00:52,678 INFO [user-service] Popular user profiles cached: 1,000 entries
+2025-07-30 08:00:53,789 ERROR [api-gateway] Load balancer health check failed
+2025-07-30 08:00:53,790 ERROR [api-gateway] java.net.SocketTimeoutException: Read timed out
+2025-07-30 08:00:53,791 ERROR [api-gateway] 	at java.net.SocketInputStream.socketRead0(Native Method)
+2025-07-30 08:00:53,792 ERROR [api-gateway] 	at com.gateway.health.HealthChecker.checkService(HealthChecker.java:45)
+2025-07-30 08:00:54,123 WARN [api-gateway] Removing unhealthy upstream server: inventory-service-2
+2025-07-30 08:00:55,234 INFO [inventory-service] Load balancer configuration updated
+2025-07-30 08:00:56,345 ERROR [notification-service] Message queue connection lost
+2025-07-30 08:00:56,346 ERROR [notification-service] com.rabbitmq.client.AlreadyClosedException: connection is already closed
+2025-07-30 08:00:56,347 ERROR [notification-service] 	at com.rabbitmq.client.impl.AMQConnection.ensureIsOpen(AMQConnection.java:213)
+2025-07-30 08:00:56,348 ERROR [notification-service] 	at com.notification.queue.MessageProducer.sendMessage(MessageProducer.java:67)
+2025-07-30 08:00:56,456 WARN [notification-service] Attempting to reconnect to message queue
+2025-07-30 08:00:57,567 INFO [notification-service] Message queue connection restored
+2025-07-30 08:00:58,678 DEBUG [payment-service] Daily payment report generated
+2025-07-30 08:00:58,789 INFO [payment-service] Total payments processed today: $45,678.90
+2025-07-30 08:00:59,123 ERROR [user-service] Null pointer exception in user profile service
+2025-07-30 08:00:59,124 ERROR [user-service] java.lang.NullPointerException: Cannot invoke "String.toLowerCase()" because "emailAddress" is null
+2025-07-30 08:00:59,125 ERROR [user-service] 	at com.user.service.UserService.validateEmail(UserService.java:89)
+2025-07-30 08:00:59,126 ERROR [user-service] 	at com.user.controller.UserController.updateProfile(UserController.java:123)
+2025-07-30 08:00:59,234 ERROR [api-gateway] PUT /api/v1/users/profile - 500 - Internal Server Error
+2025-07-30 08:01:00,345 INFO [auth-service] Daily active users: 2,345
+2025-07-30 08:01:01,456 DEBUG [inventory-service] Cleaning up expired cache entries
+2025-07-30 08:01:01,567 INFO [inventory-service] Cache cleanup completed: 234 entries removed
+2025-07-30 08:01:02,678 WARN [payment-service] High latency detected: average response time 2.5s
+2025-07-30 08:01:03,789 ERROR [payment-service] Database connection pool exhausted
+2025-07-30 08:01:03,790 ERROR [payment-service] com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to initialize pool
+2025-07-30 08:01:03,791 ERROR [payment-service] 	at com.zaxxer.hikari.pool.HikariPool.throwPoolInitializationException(HikariPool.java:590)
+2025-07-30 08:01:03,792 ERROR [payment-service] 	at com.payment.db.DatabaseManager.getConnection(DatabaseManager.java:45)
+2025-07-30 08:01:04,123 WARN [payment-service] Scaling up database connection pool
+2025-07-30 08:01:05,234 INFO [payment-service] Connection pool expanded to 50 connections
+2025-07-30 08:01:06,345 ERROR [notification-service] External API rate limit exceeded
+2025-07-30 08:01:06,346 ERROR [notification-service] com.twilio.exception.TwilioException: Rate limit exceeded (20429)
+2025-07-30 08:01:06,347 ERROR [notification-service] 	at com.twilio.http.Response.fromJson(Response.java:45)
+2025-07-30 08:01:06,348 ERROR [notification-service] 	at com.notification.sms.SmsService.sendSms(SmsService.java:78)
+2025-07-30 08:01:06,456 WARN [notification-service] SMS delivery delayed due to rate limiting
+2025-07-30 08:01:07,567 DEBUG [user-service] Garbage collection triggered
+2025-07-30 08:01:07,678 INFO [user-service] GC completed: 45ms pause time
+2025-07-30 08:01:08,789 ERROR [auth-service] LDAP authentication failure
+2025-07-30 08:01:08,790 ERROR [auth-service] javax.naming.AuthenticationException: [LDAP: error code 49 - Invalid Credentials]
+2025-07-30 08:01:08,791 ERROR [auth-service] 	at com.sun.jndi.ldap.LdapCtx.mapErrorCode(LdapCtx.java:3102)
+2025-07-30 08:01:08,792 ERROR [auth-service] 	at com.auth.ldap.LdapAuthenticator.authenticate(LdapAuthenticator.java:67)
+2025-07-30 08:01:09,123 WARN [auth-service] User authentication failed: corporate-user@company.com
+2025-07-30 08:01:10,234 INFO [api-gateway] API usage metrics: 15,234 requests in last hour
+2025-07-30 08:01:11,345 DEBUG [inventory-service] Replicating data to secondary database
+2025-07-30 08:01:11,456 INFO [inventory-service] Data replication completed successfully
+2025-07-30 08:01:12,567 ERROR [payment-service] Fraud detection alert
+2025-07-30 08:01:12,568 ERROR [payment-service] Suspicious transaction detected: amount=$9,999.99, card=****1234
+2025-07-30 08:01:12,569 ERROR [payment-service] Risk score: 95/100 - Transaction blocked
+2025-07-30 08:01:12,678 WARN [payment-service] Fraud alert sent to security team
+2025-07-30 08:01:13,789 INFO [notification-service] Fraud alert email dispatched
+2025-07-30 08:01:14,123 ERROR [user-service] File upload size exceeded
+2025-07-30 08:01:14,124 ERROR [user-service] org.springframework.web.multipart.MaxUploadSizeExceededException: Maximum upload size exceeded
+2025-07-30 08:01:14,125 ERROR [user-service] 	at org.springframework.web.multipart.commons.CommonsMultipartResolver.parseRequest(CommonsMultipartResolver.java:147)
+2025-07-30 08:01:14,126 ERROR [user-service] 	at com.user.controller.FileController.uploadAvatar(FileController.java:34)
+2025-07-30 08:01:14,234 ERROR [api-gateway] POST /api/v1/users/avatar - 413 - Payload Too Large
+2025-07-30 08:01:15,345 DEBUG [auth-service] Cleaning expired tokens from blacklist
+2025-07-30 08:01:15,456 INFO [auth-service] Token cleanup completed: 567 expired tokens removed
+2025-07-30 08:01:16,567 WARN [inventory-service] Low disk space warning: 85% used
+2025-07-30 08:01:16,678 ERROR [inventory-service] Log rotation failed due to insufficient disk space
+2025-07-30 08:01:17,789 WARN [inventory-service] Archive old logs to free up space
+2025-07-30 08:01:18,123 ERROR [api-gateway] Service mesh communication failure
+2025-07-30 08:01:18,124 ERROR [api-gateway] io.grpc.StatusRuntimeException: UNAVAILABLE: Network closed for unknown reason
+2025-07-30 08:01:18,125 ERROR [api-gateway] 	at io.grpc.stub.ClientCalls.toStatusRuntimeException(ClientCalls.java:240)
+2025-07-30 08:01:18,126 ERROR [api-gateway] 	at com.gateway.mesh.ServiceMeshClient.callService(ServiceMeshClient.java:89)
+2025-07-30 08:01:18,234 WARN [api-gateway] Falling back to direct service communication
+2025-07-30 08:01:19,345 INFO [api-gateway] Direct service call successful
+2025-07-30 08:01:20,456 DEBUG [payment-service] Processing scheduled payment: subscription_id=sub_123
+2025-07-30 08:01:20,567 INFO [payment-service] Recurring payment processed: $29.99 for user_id=12345
+2025-07-30 08:01:21,678 ERROR [notification-service] Webhook delivery failed
+2025-07-30 08:01:21,679 ERROR [notification-service] java.net.ConnectException: Connection timed out (Connection timed out)
+2025-07-30 08:01:21,680 ERROR [notification-service] 	at java.net.PlainSocketImpl.socketConnect(Native Method)
+2025-07-30 08:01:21,681 ERROR [notification-service] 	at com.notification.webhook.WebhookDelivery.deliver(WebhookDelivery.java:45)
+2025-07-30 08:01:21,789 WARN [notification-service] Webhook retry scheduled for 5 minutes
+2025-07-30 08:01:22,123 INFO [user-service] User preference updated: user_id=54321, theme=dark
+2025-07-30 08:01:23,234 DEBUG [auth-service] OAuth callback received from Google
+2025-07-30 08:01:23,345 INFO [auth-service] OAuth authentication successful: social-user@gmail.com
+2025-07-30 08:01:24,456 ERROR [inventory-service] Product image CDN unreachable
+2025-07-30 08:01:24,457 ERROR [inventory-service] java.net.UnknownHostException: cdn.productimages.com
+2025-07-30 08:01:24,458 ERROR [inventory-service] 	at java.net.InetAddress.getAllByName0(InetAddress.java:1281)
+2025-07-30 08:01:24,459 ERROR [inventory-service] 	at com.inventory.image.ImageService.getImageUrl(ImageService.java:67)
+2025-07-30 08:01:24,567 WARN [inventory-service] Using fallback image URLs
+2025-07-30 08:01:25,678 INFO [inventory-service] Product images served from backup CDN
+2025-07-30 08:01:26,789 ERROR [payment-service] Credit card validation failed
+2025-07-30 08:01:26,790 ERROR [payment-service] Invalid credit card number format: ****1111
+2025-07-30 08:01:26,791 ERROR [payment-service] Card validation error: checksum mismatch
+2025-07-30 08:01:27,123 ERROR [api-gateway] POST /api/v1/payments - 400 - Bad Request
+2025-07-30 08:01:28,234 WARN [user-service] Session timeout approaching for user_id: 12345
+2025-07-30 08:01:28,345 DEBUG [user-service] Sending session refresh notification
+2025-07-30 08:01:29,456 INFO [auth-service] Session extended for user_id: 12345
+2025-07-30 08:01:30,567 ERROR [notification-service] Template compilation error
+2025-07-30 08:01:30,568 ERROR [notification-service] org.apache.velocity.exception.ParseErrorException: Encountered "}" at line 15
+2025-07-30 08:01:30,569 ERROR [notification-service] 	at org.apache.velocity.Template.process(Template.java:123)
+2025-07-30 08:01:30,570 ERROR [notification-service] 	at com.notification.template.TemplateEngine.render(TemplateEngine.java:89)
+2025-07-30 08:01:30,678 WARN [notification-service] Template error reported to development team
+2025-07-30 08:01:31,789 DEBUG [inventory-service] Background inventory sync started
+2025-07-30 08:01:32,123 INFO [inventory-service] Synced 15,678 products with external system
+2025-07-30 08:01:33,234 ERROR [api-gateway] Request timeout for user-service
+2025-07-30 08:01:33,235 ERROR [api-gateway] java.util.concurrent.TimeoutException: Request timeout after 30000ms
+2025-07-30 08:01:33,236 ERROR [api-gateway] 	at com.gateway.proxy.ServiceProxy.call(ServiceProxy.java:67)
+2025-07-30 08:01:33,345 ERROR [api-gateway] GET /api/v1/users/12345 - 504 - Gateway Timeout
+2025-07-30 08:01:34,456 WARN [user-service] High CPU usage detected: 89%
+2025-07-30 08:01:34,567 INFO [user-service] Scaling recommendation: add 2 more instances
+2025-07-30 08:01:35,678 ERROR [payment-service] External payment gateway maintenance
+2025-07-30 08:01:35,679 ERROR [payment-service] HTTP 503: Service temporarily unavailable
+2025-07-30 08:01:35,680 ERROR [payment-service] Payment gateway is under maintenance until 09:00 UTC
+2025-07-30 08:01:35,789 WARN [payment-service] All payment processing suspended
+2025-07-30 08:01:36,123 INFO [notification-service] Maintenance notification sent to all users
+2025-07-30 08:01:37,234 DEBUG [auth-service] Generating API key for client: mobile-app-v2
+2025-07-30 08:01:37,345 INFO [auth-service] API key created: key_id=ak_789xyz, expires=2025-08-30
+2025-07-30 08:01:38,456 ERROR [inventory-service] Search index corruption detected
+2025-07-30 08:01:38,457 ERROR [inventory-service] org.apache.lucene.index.CorruptIndexException: checksum mismatch
+2025-07-30 08:01:38,458 ERROR [inventory-service] 	at org.apache.lucene.codecs.CodecUtil.checkFooter(CodecUtil.java:123)
+2025-07-30 08:01:38,459 ERROR [inventory-service] 	at com.inventory.search.LuceneSearcher.search(LuceneSearcher.java:67)
+2025-07-30 08:01:38,567 WARN [inventory-service] Rebuilding search index
+2025-07-30 08:01:39,678 INFO [inventory-service] Search index rebuild initiated
+2025-07-30 08:01:40,789 ERROR [user-service] Foreign key constraint violation
+2025-07-30 08:01:40,790 ERROR [user-service] com.mysql.cj.jdbc.exceptions.MySQLIntegrityConstraintViolationException: Cannot delete or update a parent row
+2025-07-30 08:01:40,791 ERROR [user-service] 	at com.mysql.cj.jdbc.exceptions.SQLError.createSQLException(SQLError.java:117)
+2025-07-30 08:01:40,792 ERROR [user-service] 	at com.user.service.UserService.deleteUser(UserService.java:234)
+2025-07-30 08:01:41,123 ERROR [api-gateway] DELETE /api/v1/users/54321 - 409 - Conflict
+2025-07-30 08:01:42,234 WARN [notification-service] Email bounce rate high: 15.3%
+2025-07-30 08:01:42,345 INFO [notification-service] Email reputation monitoring alert sent
+2025-07-30 08:01:43,456 DEBUG [payment-service] Cryptocurrency payment received
+2025-07-30 08:01:43,567 INFO [payment-service] Bitcoin payment confirmed: 0.0015 BTC
+2025-07-30 08:01:44,678 ERROR [auth-service] Two-factor authentication failure
+2025-07-30 08:01:44,679 ERROR [auth-service] Invalid TOTP code provided by user_id: 12345
+2025-07-30 08:01:44,680 ERROR [auth-service] Expected code window expired, received: 123456
+2025-07-30 08:01:44,789 WARN [auth-service] 2FA attempt failed, 2 attempts remaining
+2025-07-30 08:01:45,123 ERROR [api-gateway] POST /api/v1/auth/2fa/verify - 401 - Unauthorized
+2025-07-30 08:01:46,234 INFO [inventory-service] Flash sale started: 50% off laptops
+2025-07-30 08:01:46,345 WARN [inventory-service] High traffic expected, scaling up
+2025-07-30 08:01:47,456 INFO [api-gateway] Auto-scaling triggered: adding 5 instances
+2025-07-30 08:01:48,567 ERROR [user-service] Profile image processing failed
+2025-07-30 08:01:48,568 ERROR [user-service] java.awt.image.IIOException: Can't read input file
+2025-07-30 08:01:48,569 ERROR [user-service] 	at javax.imageio.ImageIO.read(ImageIO.java:1275)
+2025-07-30 08:01:48,570 ERROR [user-service] 	at com.user.image.ImageProcessor.processImage(ImageProcessor.java:45)
+2025-07-30 08:01:48,678 WARN [user-service] Using default avatar for user_id: 67890
+2025-07-30 08:01:49,789 DEBUG [payment-service] Daily settlement report generated
+2025-07-30 08:01:50,123 INFO [payment-service] Settlement total: $123,456.78
+2025-07-30 08:01:51,234 ERROR [notification-service] Push notification certificate expired
+2025-07-30 08:01:51,235 ERROR [notification-service] Certificate expired on: 2025-07-25 00:00:00
+2025-07-30 08:01:51,236 ERROR [notification-service] Apple Push Notification service authentication failed
+2025-07-30 08:01:51,345 WARN [notification-service] iOS push notifications disabled
+2025-07-30 08:01:52,456 INFO [notification-service] Certificate renewal requested
+2025-07-30 08:01:53,567 DEBUG [auth-service] Password policy check: user_id=98765
+2025-07-30 08:01:53,678 WARN [auth-service] Weak password detected, requesting update
+2025-07-30 08:01:54,789 ERROR [inventory-service] Supplier API authentication failed
+2025-07-30 08:01:54,790 ERROR [inventory-service] HTTP 401: Invalid API credentials for supplier XYZ Corp
+2025-07-30 08:01:54,791 ERROR [inventory-service] 	at com.inventory.supplier.SupplierClient.authenticate(SupplierClient.java:89)
+2025-07-30 08:01:55,123 WARN [inventory-service] Stock sync failed for supplier XYZ Corp
+2025-07-30 08:01:56,234 INFO [user-service] User data export requested: user_id=12345 (GDPR)
+2025-07-30 08:01:56,345 DEBUG [user-service] Collecting user data from all services
+2025-07-30 08:01:57,456 INFO [user-service] Data export package created: export_id=exp_123
+2025-07-30 08:01:58,567 ERROR [payment-service] Chargeback notification received
+2025-07-30 08:01:58,568 ERROR [payment-service] Chargeback for payment_id: pay_789123, amount: $99.99
+2025-07-30 08:01:58,569 ERROR [payment-service] Reason: Fraudulent transaction
+2025-07-30 08:01:58,678 WARN [payment-service] Chargeback dispute process initiated
+2025-07-30 08:01:59,789 INFO [notification-service] Chargeback alert sent to finance team
+2025-07-30 08:02:00,123 DEBUG [api-gateway] Rotating access logs
+2025-07-30 08:02:00,234 INFO [api-gateway] Log rotation completed: archived 2.3GB
+2025-07-30 08:02:01,345 ERROR [auth-service] Social login provider unavailable
+2025-07-30 08:02:01,346 ERROR [auth-service] Facebook OAuth endpoint returning HTTP 503
+2025-07-30 08:02:01,347 ERROR [auth-service] Service temporarily unavailable at oauth provider
+2025-07-30 08:02:01,456 WARN [auth-service] Facebook login temporarily disabled
+2025-07-30 08:02:02,567 INFO [user-service] User account merge completed: merged user_id=54321 into user_id=12345
+2025-07-30 08:02:03,678 DEBUG [inventory-service] Category recommendation engine training
+2025-07-30 08:02:04,789 INFO [inventory-service] ML model training completed: 94.2% accuracy
+2025-07-30 08:02:05,123 ERROR [payment-service] Subscription renewal failed
+2025-07-30 08:02:05,124 ERROR [payment-service] Credit card declined: insufficient funds
+2025-07-30 08:02:05,125 ERROR [payment-service] Card ending in 4567 declined by issuer
+2025-07-30 08:02:05,234 WARN [payment-service] Subscription grace period activated
+2025-07-30 08:02:06,345 INFO [notification-service] Payment failure notification sent
+2025-07-30 08:02:07,456 ERROR [user-service] Account verification email bounced
+2025-07-30 08:02:07,457 ERROR [user-service] SMTP error: 550 5.1.1 User unknown
+2025-07-30 08:02:07,458 ERROR [user-service] Email address invalid: nonexistent@example.com
+2025-07-30 08:02:07,567 WARN [user-service] User account marked as unverified
+2025-07-30 08:02:08,678 DEBUG [auth-service] Security audit log rotation
+2025-07-30 08:02:08,789 INFO [auth-service] Security logs archived: 1.2GB compressed
+2025-07-30 08:02:09,123 ERROR [api-gateway] DDoS attack detected
+2025-07-30 08:02:09,124 ERROR [api-gateway] Unusual traffic pattern: 50,000 req/min from subnet 10.0.0.0/24
+2025-07-30 08:02:09,125 ERROR [api-gateway] Rate limiting activated for suspicious traffic
+2025-07-30 08:02:09,234 WARN [api-gateway] DDoS protection measures enabled
+2025-07-30 08:02:10,345 INFO [api-gateway] Attack traffic successfully mitigated
+2025-07-30 08:02:11,456 DEBUG [inventory-service] Weekly sales report generation
+2025-07-30 08:02:12,567 INFO [inventory-service] Top selling product: Laptop Pro 15" (234 units)
+2025-07-30 08:02:13,678 ERROR [notification-service] Slack webhook integration failed
+2025-07-30 08:02:13,679 ERROR [notification-service] HTTP 400: Bad Request from Slack API
+2025-07-30 08:02:13,680 ERROR [notification-service] Invalid webhook URL or malformed payload
+2025-07-30 08:02:13,789 WARN [notification-service] Slack notifications temporarily disabled
+2025-07-30 08:02:14,123 INFO [payment-service] Monthly revenue report: $2,345,678.90
+2025-07-30 08:02:15,234 DEBUG [user-service] Implementing GDPR data retention policy
+2025-07-30 08:02:15,345 INFO [user-service] Deleted inactive user data: 1,234 records older than 7 years
+2025-07-30 08:02:16,456 ERROR [auth-service] Single sign-on certificate validation failed
+2025-07-30 08:02:16,457 ERROR [auth-service] SAML certificate signature invalid
+2025-07-30 08:02:16,458 ERROR [auth-service] 	at com.auth.saml.CertificateValidator.validate(CertificateValidator.java:67)
+2025-07-30 08:02:16,567 WARN [auth-service] SSO authentication disabled for security
+2025-07-30 08:02:17,678 INFO [inventory-service] Black Friday preparation: inventory checks completed
+2025-07-30 08:02:18,789 DEBUG [payment-service] PCI compliance scan initiated
+2025-07-30 08:02:19,123 INFO [payment-service] PCI DSS compliance verified: all systems secure
+2025-07-30 08:02:20,234 ERROR [user-service] Account takeover attempt detected
+2025-07-30 08:02:20,235 ERROR [user-service] Login from new device without 2FA verification
+2025-07-30 08:02:20,236 ERROR [user-service] Suspicious activity: password change + email change in 5 minutes
+2025-07-30 08:02:20,345 WARN [user-service] Account locked for security review: user_id=98765
+2025-07-30 08:02:21,456 INFO [notification-service] Security alert sent to user and administrators
+2025-07-30 08:02:22,567 DEBUG [api-gateway] Performance metrics summary
+2025-07-30 08:02:22,678 INFO [api-gateway] Average response time: 145ms, Error rate: 0.8%
+2025-07-30 08:02:23,789 ERROR [inventory-service] Warehouse integration timeout
+2025-07-30 08:02:23,790 ERROR [inventory-service] Connection timeout connecting to warehouse-api.company.com:443
+2025-07-30 08:02:23,791 ERROR [inventory-service] 	at com.inventory.warehouse.WarehouseClient.updateStock(WarehouseClient.java:89)
+2025-07-30 08:02:24,123 WARN [inventory-service] Stock levels may be out of sync
+2025-07-30 08:02:25,234 INFO [payment-service] Payment gateway maintenance window ended
+2025-07-30 08:02:25,345 INFO [payment-service] All payment processing resumed
+2025-07-30 08:02:26,456 DEBUG [auth-service] Token blacklist size: 15,678 entries
+2025-07-30 08:02:26,567 INFO [auth-service] Blacklist optimized: removed 5,432 expired entries
+2025-07-30 08:02:27,678 ERROR [user-service] Profile synchronization failed
+2025-07-30 08:02:27,679 ERROR [user-service] Version conflict: profile modified by another process
+2025-07-30 08:02:27,680 ERROR [user-service] Optimistic locking failure in user profile update
+2025-07-30 08:02:27,789 WARN [user-service] Profile update rejected, requesting refresh
+2025-07-30 08:02:28,123 ERROR [api-gateway] PUT /api/v1/users/profile - 409 - Conflict
+2025-07-30 08:02:29,234 INFO [notification-service] Newsletter campaign scheduled: Summer Sale 2025
+2025-07-30 08:02:30,345 DEBUG [inventory-service] Product recommendation cache warming
+2025-07-30 08:02:30,456 INFO [inventory-service] Recommendation cache updated: 50,000 product combinations
+2025-07-30 08:02:31,567 ERROR [payment-service] Merchant account suspended
+2025-07-30 08:02:31,568 ERROR [payment-service] Account suspension notice from payment processor
+2025-07-30 08:02:31,569 ERROR [payment-service] Reason: Unusual chargeback activity threshold exceeded
+2025-07-30 08:02:31,678 WARN [payment-service] All card payments suspended pending review
+2025-07-30 08:02:32,789 INFO [notification-service] Urgent: merchant account issue escalated to management

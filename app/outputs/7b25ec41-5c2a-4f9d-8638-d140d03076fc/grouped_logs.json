@@ -1,0 +1,15 @@
+{
+  "grouped": {
+    "NotificationService": [
+      {
+        "timestamp": "2025-10-21 10:34:01,860",
+        "service": "NotificationService",
+        "error_type": "Communication Error",
+        "severity_level": "Low",
+        "line": "2025-10-21 10:34:01,860 [INFO] [NotificationService]: Preparing email notification NOTIF-33175 for user 5147",
+        "line_number": 1
+      }
+    ]
+  },
+  "summaries": {}
+}

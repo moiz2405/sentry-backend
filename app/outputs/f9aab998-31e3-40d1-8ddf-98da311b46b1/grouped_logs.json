@@ -1,0 +1,15 @@
+{
+  "grouped": {
+    "AuthService": [
+      {
+        "timestamp": "2025-10-21 01:04:16,914",
+        "service": "AuthService",
+        "error_type": "Unknown",
+        "severity_level": "Low",
+        "line": "2025-10-21 01:04:16,914 [INFO] [AuthService]: User user_826 (ID: 4524) requested token_refresh from 192.168.3.232",
+        "line_number": 1
+      }
+    ]
+  },
+  "summaries": {}
+}

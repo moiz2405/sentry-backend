@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  sentry-backend:
+    build: .
+    container_name: sentry-backend
+    ports:
+      - "8001:8001"
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - .:/app
+
+networks:
+  default:
+    name: sentry-network

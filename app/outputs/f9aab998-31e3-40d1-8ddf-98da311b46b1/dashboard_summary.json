@@ -1,0 +1,44 @@
+{
+  "services": [
+    "AuthService"
+  ],
+  "total_services": 1,
+  "service_health": {
+    "AuthService": "healthy"
+  },
+  "severity_distribution": {
+    "AuthService": {
+      "Low": 1
+    }
+  },
+  "most_common_errors": {
+    "AuthService": "Unknown"
+  },
+  "recent_errors": {
+    "AuthService": [
+      {
+        "timestamp": "2025-10-21 01:04:16,914",
+        "service": "AuthService",
+        "error_type": "Unknown",
+        "severity_level": "Low",
+        "line": "2025-10-21 01:04:16,914 [INFO] [AuthService]: User user_826 (ID: 4524) requested token_refresh from 192.168.3.232",
+        "line_number": 1
+      }
+    ]
+  },
+  "first_error_timestamp": {
+    "AuthService": "2025-10-21 01:04:16,914"
+  },
+  "latest_error_timestamp": {
+    "AuthService": "2025-10-21 01:04:16,914"
+  },
+  "error_types": {
+    "AuthService": [
+      "Unknown"
+    ]
+  },
+  "errors_per_10_logs": [
+    0.0
+  ],
+  "avg_errors_per_10_logs": 0
+}

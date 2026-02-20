@@ -1,0 +1,305 @@
+{
+  "services": [
+    "ApiService",
+    "AuthService",
+    "InventoryService",
+    "PaymentService",
+    "NotificationService"
+  ],
+  "total_services": 5,
+  "service_health": {
+    "ApiService": "unhealthy",
+    "AuthService": "unhealthy",
+    "InventoryService": "warning",
+    "PaymentService": "unhealthy",
+    "NotificationService": "unhealthy"
+  },
+  "severity_distribution": {
+    "ApiService": {
+      "Low": 8
+    },
+    "AuthService": {
+      "Low": 8,
+      "High": 2
+    },
+    "InventoryService": {
+      "Low": 3,
+      "High": 2
+    },
+    "PaymentService": {
+      "Low": 11
+    },
+    "NotificationService": {
+      "Low": 10,
+      "High": 1
+    }
+  },
+  "most_common_errors": {
+    "ApiService": "Payment Error",
+    "AuthService": "Payment Error",
+    "InventoryService": "Database Error",
+    "PaymentService": "Payment Error",
+    "NotificationService": "Network Error"
+  },
+  "recent_errors": {
+    "ApiService": [
+      {
+        "timestamp": "2025-10-20 12:26:45,614",
+        "service": "ApiService",
+        "error_type": "Payment Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:45,614 [INFO] [ApiService]: Cache hit for API request 67230 on /orders",
+        "line_number": 12
+      },
+      {
+        "timestamp": "2025-10-20 12:26:47,236",
+        "service": "ApiService",
+        "error_type": "Payment Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:47,236 [INFO] [ApiService]: API POST /users - Request 56506 handled successfully from 192.168.219.1",
+        "line_number": 20
+      },
+      {
+        "timestamp": "2025-10-20 12:26:48,019",
+        "service": "ApiService",
+        "error_type": "Business Logic Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:48,019 [INFO] [ApiService]: API DELETE /search - Request 79186 handled successfully from 192.168.240.164",
+        "line_number": 27
+      },
+      {
+        "timestamp": "2025-10-20 12:26:50,003",
+        "service": "ApiService",
+        "error_type": "Payment Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:50,003 [INFO] [ApiService]: API PUT /categories - Request 69473 handled successfully from 192.168.228.247",
+        "line_number": 35
+      },
+      {
+        "timestamp": "2025-10-20 12:26:51,192",
+        "service": "ApiService",
+        "error_type": "Network Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:51,192 [INFO] [ApiService]: API DELETE /search - Request 37220 handled successfully from 192.168.10.77",
+        "line_number": 44
+      }
+    ],
+    "AuthService": [
+      {
+        "timestamp": "2025-10-20 12:26:48,549",
+        "service": "AuthService",
+        "error_type": "Payment Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:48,549 [ERROR] [AuthService]: LDAP connection failure during authentication for user user_556",
+        "line_number": 29
+      },
+      {
+        "timestamp": "2025-10-20 12:26:49,957",
+        "service": "AuthService",
+        "error_type": "Payment Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:49,957 [WARNING] [AuthService]: Suspicious activity for user user_374 (IP mismatch)",
+        "line_number": 32
+      },
+      {
+        "timestamp": "2025-10-20 12:26:49,957",
+        "service": "AuthService",
+        "error_type": "Business Logic Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:49,957 [WARNING] [AuthService]: Location change detected for user user_374: New York -> London",
+        "line_number": 33
+      },
+      {
+        "timestamp": "2025-10-20 12:26:49,958",
+        "service": "AuthService",
+        "error_type": "Business Logic Error",
+        "severity_level": "High",
+        "line": "2025-10-20 12:26:49,958 [ERROR] [AuthService]: Potential account breach attempt for user user_374",
+        "line_number": 34
+      },
+      {
+        "timestamp": "2025-10-20 12:26:54,118",
+        "service": "AuthService",
+        "error_type": "Payment Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:54,118 [INFO] [AuthService]: User user_880 (ID: 6894) requested profile_update from 192.168.12.81",
+        "line_number": 45
+      }
+    ],
+    "InventoryService": [
+      {
+        "timestamp": "2025-10-20 12:26:44,286",
+        "service": "InventoryService",
+        "error_type": "Database Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:44,286 [INFO] [InventoryService]: Inventory check OK for Monitor, available: 69 units",
+        "line_number": 3
+      },
+      {
+        "timestamp": "2025-10-20 12:26:46,901",
+        "service": "InventoryService",
+        "error_type": "Database Error",
+        "severity_level": "High",
+        "line": "2025-10-20 12:26:46,901 [ERROR] [InventoryService]: Barcode scan failed for Headphones (SKU: HP-4567)",
+        "line_number": 18
+      },
+      {
+        "timestamp": "2025-10-20 12:26:46,901",
+        "service": "InventoryService",
+        "error_type": "Database Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:46,901 [WARNING] [InventoryService]: Item metadata update required for Headphones",
+        "line_number": 19
+      },
+      {
+        "timestamp": "2025-10-20 12:26:50,471",
+        "service": "InventoryService",
+        "error_type": "Business Logic Error",
+        "severity_level": "High",
+        "line": "2025-10-20 12:26:50,471 [ERROR] [InventoryService]: Inventory sync failed for Laptop in SEA-5",
+        "line_number": 36
+      },
+      {
+        "timestamp": "2025-10-20 12:26:50,471",
+        "service": "InventoryService",
+        "error_type": "Business Logic Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:50,471 [WARNING] [InventoryService]: Retry 2 of 3 for inventory sync",
+        "line_number": 37
+      }
+    ],
+    "PaymentService": [
+      {
+        "timestamp": "2025-10-20 12:26:47,729",
+        "service": "PaymentService",
+        "error_type": "Payment Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:47,729 [INFO] [PaymentService]: Receipt generated for transaction TXN-295238",
+        "line_number": 26
+      },
+      {
+        "timestamp": "2025-10-20 12:26:50,689",
+        "service": "PaymentService",
+        "error_type": "Payment Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:50,689 [INFO] [PaymentService]: Payment initiated: TXN-807387 for order ORD-80283 - EUR 1507.66",
+        "line_number": 38
+      },
+      {
+        "timestamp": "2025-10-20 12:26:50,689",
+        "service": "PaymentService",
+        "error_type": "Payment Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:50,689 [INFO] [PaymentService]: Processing Amex payment ending in 6931 for TXN-807387",
+        "line_number": 39
+      },
+      {
+        "timestamp": "2025-10-20 12:26:50,690",
+        "service": "PaymentService",
+        "error_type": "Payment Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:50,690 [INFO] [PaymentService]: Payment TXN-807387 successfully processed for user 7192",
+        "line_number": 40
+      },
+      {
+        "timestamp": "2025-10-20 12:26:50,690",
+        "service": "PaymentService",
+        "error_type": "Payment Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:50,690 [INFO] [PaymentService]: Receipt generated for transaction TXN-807387",
+        "line_number": 41
+      }
+    ],
+    "NotificationService": [
+      {
+        "timestamp": "2025-10-20 12:26:47,388",
+        "service": "NotificationService",
+        "error_type": "Business Logic Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:47,388 [INFO] [NotificationService]: SMS notification NOTIF-59771 sent to user 3457",
+        "line_number": 23
+      },
+      {
+        "timestamp": "2025-10-20 12:26:49,689",
+        "service": "NotificationService",
+        "error_type": "Database Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:49,689 [ERROR] [NotificationService]: Failed to send notification NOTIF-51920: user 9542 not found",
+        "line_number": 30
+      },
+      {
+        "timestamp": "2025-10-20 12:26:49,689",
+        "service": "NotificationService",
+        "error_type": "Database Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:49,689 [WARNING] [NotificationService]: Notification marked as undeliverable for event system_update",
+        "line_number": 31
+      },
+      {
+        "timestamp": "2025-10-20 12:26:51,108",
+        "service": "NotificationService",
+        "error_type": "Network Error",
+        "severity_level": "High",
+        "line": "2025-10-20 12:26:51,108 [ERROR] [NotificationService]: Template rendering failed for notification NOTIF-32983",
+        "line_number": 42
+      },
+      {
+        "timestamp": "2025-10-20 12:26:51,108",
+        "service": "NotificationService",
+        "error_type": "Network Error",
+        "severity_level": "Low",
+        "line": "2025-10-20 12:26:51,108 [WARNING] [NotificationService]: Using fallback template for event promotional",
+        "line_number": 43
+      }
+    ]
+  },
+  "first_error_timestamp": {
+    "ApiService": "2025-10-20 12:26:43,840",
+    "AuthService": "2025-10-20 12:26:44,112",
+    "InventoryService": "2025-10-20 12:26:44,286",
+    "PaymentService": "2025-10-20 12:26:45,094",
+    "NotificationService": "2025-10-20 12:26:45,793"
+  },
+  "latest_error_timestamp": {
+    "ApiService": "2025-10-20 12:26:51,192",
+    "AuthService": "2025-10-20 12:26:54,118",
+    "InventoryService": "2025-10-20 12:26:50,471",
+    "PaymentService": "2025-10-20 12:26:50,690",
+    "NotificationService": "2025-10-20 12:26:51,108"
+  },
+  "error_types": {
+    "ApiService": [
+      "Network Error",
+      "Business Logic Error",
+      "Communication Error",
+      "Payment Error"
+    ],
+    "AuthService": [
+      "Network Error",
+      "Business Logic Error",
+      "Communication Error",
+      "Payment Error"
+    ],
+    "InventoryService": [
+      "Database Error",
+      "Business Logic Error"
+    ],
+    "PaymentService": [
+      "Payment Error"
+    ],
+    "NotificationService": [
+      "Network Error",
+      "Business Logic Error",
+      "Database Error",
+      "Communication Error"
+    ]
+  },
+  "errors_per_10_logs": [
+    0,
+    1,
+    1,
+    2,
+    1
+  ],
+  "avg_errors_per_10_logs": 1.0
+}

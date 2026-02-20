@@ -1,0 +1,43 @@
+# FastAPI Backend Dependencies
+fastapi==0.104.1
+uvicorn==0.24.0
+websockets==12.0
+python-multipart==0.0.6
+
+# Existing AI and Processing Dependencies  
+
+pydantic<2.0.0
+numpy
+pathlib
+pyttsx3 
+requests
+diskcache
+python-pptx
+watchdog
+prompt-toolkit
+PyPDF2
+
+# Additional Backend Dependencies
+python-dotenv==1.0.0
+supabase==2.10.0
+asyncio-mqtt==0.16.1
+aiofiles==23.2.1
+python-json-logger==2.0.7
+schedule==1.2.0
+
+# Database and Storage (optional)
+# sqlalchemy==2.0.23
+# asyncpg==0.29.0
+# redis==5.0.1
+
+# Monitoring and Metrics (optional)
+# prometheus-client==0.19.0
+# psutil==5.9.6
+
+# sudo apt install software-properties-common
+# sudo add-apt-repository ppa:deadsnakes/ppa
+# sudo apt update
+# sudo apt install python3.11 python3.11-venv python3.11-dev
+# python3.11 -m venv venv
+# source venv/bin/activate
+# pip install -r requirements.txt
