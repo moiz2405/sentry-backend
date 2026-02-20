@@ -289,6 +289,24 @@ async def create_app(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.post("/apps/{app_id}/rotate-key", status_code=200)
+async def rotate_api_key(app_id: str, user_id: str = Depends(get_current_user_id)):
+    """Generate a new API key for an app, invalidating the previous one."""
+    client = _get_supabase()
+    if not client:
+        raise HTTPException(status_code=503, detail="Database not configured")
+    if not verify_app_ownership(app_id, user_id):
+        raise HTTPException(status_code=404, detail="App not found")
+    new_key = generate_api_key()
+    try:
+        client.table("apps").update(
+            {"api_key": new_key, "updated_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("id", app_id).execute()
+        return {"api_key": new_key}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.delete("/apps/{app_id}", status_code=200)
 async def delete_app(app_id: str, user_id: str = Depends(get_current_user_id)):
     """Delete an app (must belong to the authenticated user)."""
