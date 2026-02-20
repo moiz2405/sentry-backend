@@ -279,16 +279,10 @@ async def create_app(
         "api_key": api_key,
     }
     try:
-        result = (
-            client.table("apps")
-            .insert(payload)
-            .select("id,user_id,name,description,api_key,created_at,updated_at")
-            .single()
-            .execute()
-        )
+        result = client.table("apps").insert(payload).execute()
         if not result.data:
             raise HTTPException(status_code=500, detail="Failed to create app")
-        return result.data
+        return result.data[0]
     except HTTPException:
         raise
     except Exception as exc:
