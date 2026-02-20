@@ -292,14 +292,15 @@ def start_device_session(
         "created_at": _now_utc().isoformat(),
     }
     try:
-        result = (
-            client.table("sdk_device_sessions")
-            .insert(payload)
-            .select("device_code,user_code,expires_at")
-            .single()
-            .execute()
-        )
-        return result.data if result.data else None
+        result = client.table("sdk_device_sessions").insert(payload).execute()
+        row = result.data[0] if result.data else None
+        if not row:
+            return None
+        return {
+            "device_code": row["device_code"],
+            "user_code": row["user_code"],
+            "expires_at": row["expires_at"],
+        }
     except Exception:
         return None
 
@@ -375,11 +376,9 @@ def complete_device_session(
                     "api_key": api_key,
                 }
             )
-            .select("id,name")
-            .single()
             .execute()
         )
-        app = app_result.data
+        app = app_result.data[0] if app_result.data else None
         if not app:
             return None
 
