@@ -1,1 +1,4 @@
 .env
+.env.prod
+# .env.example and .env.prod.example are intentionally tracked
+
