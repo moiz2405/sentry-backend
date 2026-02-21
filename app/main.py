@@ -102,6 +102,11 @@ class SyncUserRequest(BaseModel):
 class CreateAppRequest(BaseModel):
     name: str
     description: Optional[str] = None
+    # Optional user fields — used to auto-upsert the user row if it doesn't
+    # exist yet (guards against the server-side auth callback being skipped).
+    user_email: Optional[str] = None
+    user_name: Optional[str] = None
+    user_image: Optional[str] = None
 
 
 class IngestRequest(BaseModel):
@@ -199,17 +204,18 @@ async def sdk_schema_validate():
 async def sync_user(request: SyncUserRequest):
     """
     Upsert a user row from NextAuth session data.
-    Called by the frontend immediately after Google OAuth completes.
+    Returns the canonical DB id (may differ from request.id if the email
+    already existed under a different id — e.g. stale Auth.js UUID).
     """
-    ok = upsert_user(
+    canonical_id = upsert_user(
         user_id=request.id,
         email=request.email,
         name=request.name,
         image=request.image,
     )
-    if not ok:
+    if canonical_id is None:
         raise HTTPException(status_code=503, detail="Database not available")
-    return {"status": "ok", "id": request.id}
+    return {"status": "ok", "id": canonical_id}
 
 
 # ============================================================
@@ -270,6 +276,19 @@ async def create_app(
         raise HTTPException(status_code=503, detail="Database not configured")
     if not request.name.strip():
         raise HTTPException(status_code=400, detail="name is required")
+
+    # Ensure the user row exists before inserting the app (FK guard).
+    # upsert_user now returns the canonical DB id — use it in case the
+    # session id was a stale UUID that maps to a different DB id.
+    if request.user_email:
+        canonical_id = upsert_user(
+            user_id=user_id,
+            email=request.user_email,
+            name=request.user_name,
+            image=request.user_image,
+        )
+        if canonical_id:
+            user_id = canonical_id
 
     api_key = generate_api_key()
     payload = {
