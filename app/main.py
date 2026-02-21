@@ -846,7 +846,7 @@ async def chat_with_logs(
     body_bytes = json.dumps(payload).encode("utf-8")
 
     # Use a thread + asyncio.Queue so the blocking urllib stream doesn't stall the event loop
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
     full_answer: list = []
 
@@ -897,4 +897,12 @@ async def chat_with_logs(
             updated = updated[-100:]
         save_app_chat(app_id, updated)
 
-    return StreamingResponse(_stream(), media_type="text/plain")
+    return StreamingResponse(
+        _stream(),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "X-Accel-Buffering": "no",       # disable nginx proxy buffering
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+        },
+    )
