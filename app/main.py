@@ -78,7 +78,7 @@ RISK_ALERT_WEBHOOK_URL = os.environ.get("RISK_ALERT_WEBHOOK_URL", "").strip()
 NOTIFICATION_COOLDOWN_SECONDS = int(os.environ.get("NOTIFICATION_COOLDOWN_SECONDS", "300"))
 
 EMAIL_ALERT_FROM = os.environ.get("EMAIL_ALERT_FROM", "").strip()
-EMAIL_ALERT_TO = [
+EMAIL_ALERT_CC = [
     addr.strip()
     for addr in os.environ.get("EMAIL_ALERT_TO", "").split(",")
     if addr.strip()
@@ -918,11 +918,18 @@ def _post_webhook(payload: dict) -> tuple[bool, str]:
 
 # ── Email via Resend REST API ─────────────────────────────────────────────────
 
+def _resolve_recipients(app_id: str) -> list[str]:
+    """Always resolves the app owner's email; EMAIL_ALERT_TO adds extra CC recipients."""
+    owner = get_alert_recipient_emails(app_id)
+    combined = owner + [e for e in EMAIL_ALERT_CC if e not in owner]
+    return combined
+
+
 def _send_resend(app_id: str, subject: str, body_lines: list) -> tuple[bool, str]:
     """Send email via Resend REST API. No SMTP config needed — just RESEND_API_KEY."""
     if not RESEND_API_KEY:
         return False, "not_configured"
-    recipients = EMAIL_ALERT_TO or get_alert_recipient_emails(app_id)
+    recipients = _resolve_recipients(app_id)
     if not recipients:
         return False, "not_configured:missing_recipient"
     if not EMAIL_ALERT_FROM:
@@ -953,7 +960,7 @@ def _send_resend(app_id: str, subject: str, body_lines: list) -> tuple[bool, str
 # ── Email via SMTP (fallback when RESEND_API_KEY not set) ─────────────────────
 
 def _send_email(app_id: str, subject: str, body_lines: list) -> tuple[bool, str]:
-    recipients = EMAIL_ALERT_TO or get_alert_recipient_emails(app_id)
+    recipients = _resolve_recipients(app_id)
     if not recipients:
         return False, "not_configured:missing_recipient"
     if not EMAIL_ALERT_FROM or not SMTP_HOST:
