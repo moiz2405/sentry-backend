@@ -618,7 +618,12 @@ _SERVICE_KEYWORDS: dict = {
     "scheduler": ["cron", "scheduled task", "periodic task", "job scheduled"],
 }
 
-_MODULE_PATH_RE = re.compile(r"\b([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){1,})\b")
+_MODULE_PATH_RE   = re.compile(r"\b([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){1,})\b")
+# Matches [LEVEL] [ServiceTag] so we can swap the service tag before AI ingestion
+_LOG_SERVICE_TAG_RE = re.compile(
+    r"(\[(?:INFO|WARNING|WARN|ERROR|CRITICAL|DEBUG)\])\s+\[([^\]]*)\]",
+    re.IGNORECASE,
+)
 _FILE_PATH_RE   = re.compile(r'[Ff]ile ["\']([^"\']+\.py)["\']')
 _URL_PATH_RE    = re.compile(r'(?:GET|POST|PUT|DELETE|PATCH)\s+/([a-zA-Z][a-zA-Z0-9_-]+)', re.I)
 
@@ -729,6 +734,23 @@ def _parse_log_line(raw: str, app_id: str) -> dict:
     }
 
 
+def _rewrite_service_tag(raw: str, inferred_service: Optional[str]) -> str:
+    """
+    Swap the [logger_name] tag in a raw log string with the inferred domain
+    so the AI summary sees meaningful service names instead of [root] / [main].
+
+    e.g.  "2026-02-21 16:33:03 [ERROR] [root] DB connection failed"
+          → "2026-02-21 16:33:03 [ERROR] [database] DB connection failed"
+    """
+    if not inferred_service:
+        return raw
+    return _LOG_SERVICE_TAG_RE.sub(
+        lambda m: f"{m.group(1)} [{inferred_service}]",
+        raw,
+        count=1,
+    )
+
+
 @app.post("/ingest")
 async def ingest_logs(
     request: IngestRequest,
@@ -752,10 +774,17 @@ async def ingest_logs(
     parsed = [_parse_log_line(raw, app_id) for raw in request.logs]
     inserted = bulk_insert_logs(parsed)
 
+    # Rewrite noise service tags ([root], [main] …) → inferred domain names
+    # so the AI sees [database] / [auth] / [payment] instead of [root].
+    ai_logs = [
+        _rewrite_service_tag(raw, p.get("service"))
+        for raw, p in zip(request.logs, parsed)
+    ]
+
     # AI processing — uses per-app outputs dir to maintain risk history state
     outputs_dir = os.path.join(OUTPUTS_BASE_DIR, app_id)
     os.makedirs(outputs_dir, exist_ok=True)
-    dashboard = process_and_summarize_stream(request.logs, outputs_dir)
+    dashboard = process_and_summarize_stream(ai_logs, outputs_dir)
 
     # Store summary in DB
     store_summary(app_id, dashboard)
