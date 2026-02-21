@@ -83,11 +83,16 @@ EMAIL_ALERT_TO = [
     for addr in os.environ.get("EMAIL_ALERT_TO", "").split(",")
     if addr.strip()
 ]
-SMTP_HOST = os.environ.get("SMTP_HOST", "").strip()
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_HOST     = os.environ.get("SMTP_HOST", "").strip()
+SMTP_PORT     = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USERNAME = os.environ.get("SMTP_USERNAME", "").strip()
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").strip()
-SMTP_USE_TLS = os.environ.get("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes", "on"}
+SMTP_USE_TLS  = os.environ.get("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes", "on"}
+
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
 
 SDK_VERIFICATION_BASE_URL = os.environ.get(
     "SDK_VERIFICATION_BASE_URL", "http://localhost:3000"
@@ -688,53 +693,6 @@ async def ingest_logs(
     }
 
 
-def _send_anomaly_alert_email(app_id: str, anomaly: dict) -> None:
-    """Send an email for a high/critical anomaly using existing SMTP infrastructure."""
-    recipients = EMAIL_ALERT_TO or get_alert_recipient_emails(app_id)
-    if not recipients or not EMAIL_ALERT_FROM or not SMTP_HOST:
-        return
-
-    severity   = anomaly.get("severity", "").upper()
-    title      = anomaly.get("title", "Anomaly detected")
-    summary    = anomaly.get("summary", "")
-    services   = ", ".join(anomaly.get("services_affected", [])) or "unknown"
-    atype      = anomaly.get("type", "").replace("_", " ").title()
-
-    msg = EmailMessage()
-    msg["From"]    = EMAIL_ALERT_FROM
-    msg["To"]      = ", ".join(recipients)
-    msg["Subject"] = f"[Sentry Anomaly] [{severity}] {title}"
-    msg.set_content("\n".join([
-        f"Anomaly detected in your application",
-        "",
-        f"App ID:            {app_id}",
-        f"Type:              {atype}",
-        f"Severity:          {severity}",
-        f"Affected services: {services}",
-        "",
-        f"Summary:",
-        f"  {summary}",
-        "",
-        "Open your Sentry dashboard → Anomalies tab for full details.",
-    ]))
-
-    try:
-        if SMTP_USE_TLS:
-            ctx = ssl.create_default_context()
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
-                server.starttls(context=ctx)
-                if SMTP_USERNAME:
-                    server.login(SMTP_USERNAME, SMTP_PASSWORD)
-                server.send_message(msg)
-        else:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) as server:
-                if SMTP_USERNAME:
-                    server.login(SMTP_USERNAME, SMTP_PASSWORD)
-                server.send_message(msg)
-    except Exception:
-        pass
-
-
 def _run_anomaly_detection(app_id: str) -> None:
     """Fetch recent logs, run all detectors, persist new anomalies. Runs in a daemon thread."""
     try:
@@ -744,10 +702,17 @@ def _run_anomaly_detection(app_id: str) -> None:
             if found:
                 saved = save_anomalies(app_id, found)
                 if saved > 0:
-                    # Email for high/critical anomalies (save_anomalies already de-duped)
                     for a in found:
                         if a.get("severity") in ("high", "critical"):
-                            _send_anomaly_alert_email(app_id, a)
+                            atype = a.get("type", "").replace("_", " ").title()
+                            _notify_all(
+                                app_id=app_id,
+                                title=a.get("title", "Anomaly detected"),
+                                summary=a.get("summary", ""),
+                                severity=a.get("severity", "high"),
+                                services=a.get("services_affected", []),
+                                extra_lines=[f"Type: {atype}"],
+                            )
     except Exception:
         pass
 
@@ -855,16 +820,85 @@ async def sdk_device_complete(request: DeviceCompleteRequest):
 
 
 # ============================================================
-# Risk notifications (in-memory cooldown + webhook/email)
+# Notifications — unified multi-channel system
+# Channels: Telegram · Discord · Email · Generic Webhook
+# Each channel fires only if the relevant env vars are set.
 # ============================================================
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# Severity → (emoji, Discord embed color int)
+_SEV_META = {
+    "critical": ("🔴", 0xED4245),
+    "high":     ("🟠", 0xFFA500),
+    "medium":   ("🟡", 0xFEE75C),
+    "low":      ("🔵", 0x5865F2),
+}
+
+
+# ── Telegram ──────────────────────────────────────────────────────────────────
+
+def _send_telegram(text: str) -> tuple[bool, str]:
+    """Send a plain Markdown message to a Telegram chat via Bot API."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return False, "not_configured"
+    try:
+        body = json.dumps({
+            "chat_id":    TELEGRAM_CHAT_ID,
+            "text":       text,
+            "parse_mode": "Markdown",
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+        return True, "sent"
+    except Exception as exc:
+        return False, f"failed:{type(exc).__name__}"
+
+
+# ── Discord ───────────────────────────────────────────────────────────────────
+
+def _send_discord(title: str, description: str, color: int, fields: list) -> tuple[bool, str]:
+    """Send a rich embed to a Discord channel via webhook."""
+    if not DISCORD_WEBHOOK_URL:
+        return False, "not_configured"
+    try:
+        body = json.dumps({
+            "username": "Sentry Monitor",
+            "embeds": [{
+                "title":       title,
+                "description": description,
+                "color":       color,
+                "fields":      fields,
+                "footer":      {"text": "Sentry Monitor"},
+                "timestamp":   _utc_now_iso(),
+            }],
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            DISCORD_WEBHOOK_URL,
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+        return True, "sent"
+    except Exception as exc:
+        return False, f"failed:{type(exc).__name__}"
+
+
+# ── Generic webhook (unchanged) ───────────────────────────────────────────────
+
 def _post_webhook(payload: dict) -> tuple[bool, str]:
     if not RISK_ALERT_WEBHOOK_URL:
-        return False, "webhook_not_configured"
+        return False, "not_configured"
     try:
         body = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
@@ -880,41 +914,20 @@ def _post_webhook(payload: dict) -> tuple[bool, str]:
         return False, f"failed:{type(exc).__name__}"
 
 
-def _send_email_alert(app_id: str, payload: dict) -> tuple[bool, str]:
+# ── Email ─────────────────────────────────────────────────────────────────────
+
+def _send_email(app_id: str, subject: str, body_lines: list) -> tuple[bool, str]:
     recipients = EMAIL_ALERT_TO or get_alert_recipient_emails(app_id)
     if not recipients:
-        return False, "email_not_configured:missing_recipient"
+        return False, "not_configured:missing_recipient"
     if not EMAIL_ALERT_FROM or not SMTP_HOST:
-        return False, "email_not_configured:missing_smtp"
+        return False, "not_configured:missing_smtp"
 
     msg = EmailMessage()
-    msg["From"] = EMAIL_ALERT_FROM
-    msg["To"] = ", ".join(recipients)
-    msg["Subject"] = (
-        f"[Sentry Risk Alert] {payload.get('service', 'service')} "
-        f"{payload.get('level', 'risk')} risk"
-    )
-
-    reasons = payload.get("reasons", [])
-    recommendations = payload.get("recommendations", [])
-    lines = [
-        "Service failure risk alert",
-        "",
-        f"App ID:      {payload.get('app_id')}",
-        f"Service:     {payload.get('service')}",
-        f"Risk score:  {payload.get('score')}",
-        f"Risk level:  {payload.get('level')}",
-        f"Confidence:  {payload.get('confidence')}",
-        f"Trend:       {payload.get('trend')}",
-        f"ETA (min):   {payload.get('eta_minutes')}",
-        "",
-        "Reasons:",
-        *([f"  - {r}" for r in reasons] if reasons else ["  - N/A"]),
-        "",
-        "Recommendations:",
-        *([f"  - {r}" for r in recommendations] if recommendations else ["  - N/A"]),
-    ]
-    msg.set_content("\n".join(lines))
+    msg["From"]    = EMAIL_ALERT_FROM
+    msg["To"]      = ", ".join(recipients)
+    msg["Subject"] = subject
+    msg.set_content("\n".join(body_lines))
 
     try:
         if SMTP_USE_TLS:
@@ -934,8 +947,97 @@ def _send_email_alert(app_id: str, payload: dict) -> tuple[bool, str]:
         return False, f"failed:{type(exc).__name__}"
 
 
+# ── Unified dispatcher ────────────────────────────────────────────────────────
+
+def _notify_all(
+    app_id:   str,
+    title:    str,
+    summary:  str,
+    severity: str,
+    services: list,
+    extra_lines: Optional[list] = None,
+    webhook_payload: Optional[dict] = None,
+) -> dict:
+    """
+    Fire every configured notification channel.
+    Returns a dict with per-channel results.
+    """
+    sev_lower = severity.lower()
+    emoji, color = _SEV_META.get(sev_lower, ("⚪", 0x99AAB5))
+    sev_upper = severity.upper()
+    services_str = ", ".join(services) if services else "unknown"
+    extra = extra_lines or []
+
+    # ── Telegram ──────────────────────────────────────────────
+    tg_text = "\n".join([
+        f"{emoji} *[{sev_upper}] {title}*",
+        "",
+        summary,
+        "",
+        f"*Services:* {services_str}",
+        f"*App:* `{app_id}`",
+        *([" "] + extra if extra else []),
+        "",
+        "_Open your Sentry dashboard for details._",
+    ])
+    tg_ok, tg_status = _send_telegram(tg_text)
+
+    # ── Discord ───────────────────────────────────────────────
+    dc_fields = [
+        {"name": "Severity",  "value": sev_upper,    "inline": True},
+        {"name": "Services",  "value": services_str, "inline": True},
+        {"name": "App ID",    "value": f"`{app_id}`", "inline": False},
+    ]
+    for line in extra:
+        if ": " in line:
+            k, v = line.split(": ", 1)
+            dc_fields.append({"name": k.strip(), "value": v.strip(), "inline": True})
+    dc_ok, dc_status = _send_discord(
+        title=f"{emoji} {title}",
+        description=summary,
+        color=color,
+        fields=dc_fields,
+    )
+
+    # ── Email ─────────────────────────────────────────────────
+    email_body = [
+        title,
+        "=" * len(title),
+        "",
+        f"Severity:          {sev_upper}",
+        f"Affected services: {services_str}",
+        f"App ID:            {app_id}",
+        "",
+        "Summary:",
+        f"  {summary}",
+        *([" "] + extra if extra else []),
+        "",
+        "Open your Sentry dashboard → Anomalies tab for full details.",
+    ]
+    email_ok, email_status = _send_email(
+        app_id=app_id,
+        subject=f"[Sentry] [{sev_upper}] {title}",
+        body_lines=email_body,
+    )
+
+    # ── Generic webhook ───────────────────────────────────────
+    if webhook_payload:
+        wh_ok, wh_status = _post_webhook(webhook_payload)
+    else:
+        wh_ok, wh_status = False, "skipped"
+
+    return {
+        "telegram": {"sent": tg_ok, "status": tg_status},
+        "discord":  {"sent": dc_ok, "status": dc_status},
+        "email":    {"sent": email_ok, "status": email_status},
+        "webhook":  {"sent": wh_ok,  "status": wh_status},
+    }
+
+
+# ── Risk notification trigger ─────────────────────────────────────────────────
+
 def _trigger_risk_notifications(app_id: str, dashboard: dict) -> list[dict]:
-    """Emit alert events for at-risk services, with in-memory cooldown."""
+    """Emit alerts for at-risk services, with in-memory cooldown."""
     at_risk_services = dashboard.get("at_risk_services", [])
     if not at_risk_services:
         return []
@@ -944,41 +1046,55 @@ def _trigger_risk_notifications(app_id: str, dashboard: dict) -> list[dict]:
     triggered = []
 
     for service in at_risk_services:
-        app_state = NOTIFICATION_COOLDOWN_STATE.setdefault(app_id, {})
+        app_state    = NOTIFICATION_COOLDOWN_STATE.setdefault(app_id, {})
         last_sent_ts = float(app_state.get(service, {}).get("last_sent_ts", 0))
         if (now_epoch - last_sent_ts) < NOTIFICATION_COOLDOWN_SECONDS:
             continue
 
-        score = dashboard.get("service_risk_scores", {}).get(service, 0)
-        level = dashboard.get("service_risk_levels", {}).get(service, "low")
-        confidence = dashboard.get("service_risk_confidence", {}).get(service, 0)
-        trend = dashboard.get("service_risk_trend", {}).get(service, "stable")
+        score       = dashboard.get("service_risk_scores",      {}).get(service, 0)
+        level       = dashboard.get("service_risk_levels",      {}).get(service, "low")
+        confidence  = dashboard.get("service_risk_confidence",  {}).get(service, 0)
+        trend       = dashboard.get("service_risk_trend",       {}).get(service, "stable")
         eta_minutes = dashboard.get("service_failure_eta_minutes", {}).get(service)
+        reasons     = dashboard.get("service_risk_reasons",     {}).get(service, [])
+        recs        = dashboard.get("service_recommendations",  {}).get(service, [])
 
-        payload = {
-            "event": "service_failure_risk",
-            "timestamp": _utc_now_iso(),
-            "app_id": app_id,
-            "service": service,
-            "score": score,
-            "level": level,
-            "confidence": confidence,
-            "trend": trend,
+        extra_lines = [
+            f"Risk score: {score}",
+            f"Confidence: {confidence}",
+            f"Trend: {trend}",
+        ]
+        if eta_minutes:
+            extra_lines.append(f"ETA (min): {eta_minutes}")
+        if reasons:
+            extra_lines += [f"Reason: {r}" for r in reasons[:3]]
+        if recs:
+            extra_lines += [f"Fix: {r}" for r in recs[:2]]
+
+        webhook_payload = {
+            "event":       "service_failure_risk",
+            "timestamp":   _utc_now_iso(),
+            "app_id":      app_id,
+            "service":     service,
+            "score":       score,
+            "level":       level,
+            "confidence":  confidence,
+            "trend":       trend,
             "eta_minutes": eta_minutes,
-            "message": f"Service '{service}' is likely to fail soon.",
-            "reasons": dashboard.get("service_risk_reasons", {}).get(service, []),
-            "recommendations": dashboard.get("service_recommendations", {}).get(service, []),
+            "reasons":     reasons,
         }
 
-        webhook_sent, webhook_status = _post_webhook(payload)
-        email_sent, email_status = _send_email_alert(app_id, payload)
+        delivery = _notify_all(
+            app_id=app_id,
+            title=f"Service at risk: {service} ({level})",
+            summary=f"Service *{service}* is at **{level}** failure risk (score {score}, trend: {trend}).",
+            severity=level,
+            services=[service],
+            extra_lines=extra_lines,
+            webhook_payload=webhook_payload,
+        )
 
-        payload["delivery"] = {
-            "webhook": {"sent": webhook_sent, "status": webhook_status},
-            "email": {"sent": email_sent, "status": email_status},
-        }
-
-        triggered.append(payload)
+        triggered.append({**webhook_payload, "delivery": delivery})
         app_state[service] = {"last_sent_ts": now_epoch, "last_score": score, "last_level": level}
 
     return triggered
