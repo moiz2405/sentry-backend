@@ -123,6 +123,11 @@ class DeviceCompleteRequest(BaseModel):
     device_code: str
     user_id: str
     app_name: Optional[str] = None
+    # Optional user fields — used to upsert the user row and resolve the
+    # canonical DB id before creating the app (guards stale UUID sessions).
+    user_email: Optional[str] = None
+    user_name: Optional[str] = None
+    user_image: Optional[str] = None
 
 
 # ============================================================
@@ -561,9 +566,32 @@ async def sdk_device_complete(request: DeviceCompleteRequest):
     if not request.device_code.strip() or not request.user_id.strip():
         raise HTTPException(status_code=400, detail="device_code and user_id are required")
 
+    # If the client supplied user profile info, upsert the user row and use the
+    # canonical DB id. This handles sessions where user.id is a stale/temp UUID
+    # that doesn't match the primary key in the users table.
+    user_id = request.user_id.strip()
+    if request.user_email:
+        canonical = upsert_user(
+            user_id=user_id,
+            email=request.user_email,
+            name=request.user_name or "",
+            image=request.user_image or "",
+        )
+        if canonical:
+            user_id = canonical
+
+    # #region agent log
+    try:
+        import json as _json, time as _time
+        with open("debug-8df084.log", "a") as _f:
+            _f.write(_json.dumps({"sessionId":"8df084","location":"main.py:sdk_device_complete","message":"complete called","data":{"orig_user_id":request.user_id,"resolved_user_id":user_id,"has_email":bool(request.user_email)},"timestamp":int(_time.time()*1000)}) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
     result = complete_device_session(
         device_code=request.device_code.strip(),
-        user_id=request.user_id.strip(),
+        user_id=user_id,
         app_name_override=request.app_name,
     )
     if not result:
