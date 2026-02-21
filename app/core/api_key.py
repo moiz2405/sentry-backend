@@ -545,6 +545,8 @@ def validate_sdk_schema() -> dict:
             "sdk_device_sessions",
             ["device_code", "status", "app_name", "expires_at", "user_id", "app_id", "api_key"],
         ),
+        "app_chats":  _probe_table_columns("app_chats",  ["app_id", "messages"]),
+        "anomalies":  _probe_table_columns("anomalies",  ["id", "app_id", "type", "severity"]),
     }
 
     all_ok = all(v["ok"] for v in checks.values())
@@ -554,7 +556,11 @@ def validate_sdk_schema() -> dict:
             guidance.append(f"Table '{table}' is missing or incomplete: {result.get('error', '')}")
 
     if not all_ok and not guidance:
-        guidance.append("Run the migration in supabase/migrations/20260220000000_full_schema.sql")
+        guidance.append(
+            "Run missing migrations from supabase/migrations/ in the Supabase SQL editor. "
+            "Key files: 20260220000000_full_schema.sql, 20260221000000_add_app_chats.sql, "
+            "20260221200000_add_anomalies.sql"
+        )
 
     return {
         "ok": all_ok,
@@ -714,7 +720,10 @@ def save_anomalies(app_id: str, anomalies: list) -> int:
     try:
         client.table("anomalies").insert(rows).execute()
         return len(rows)
-    except Exception:
+    except Exception as exc:
+        import traceback
+        print(f"[save_anomalies] DB insert failed for {app_id}: {exc}", flush=True)
+        traceback.print_exc()
         return 0
 
 
