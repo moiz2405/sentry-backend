@@ -328,20 +328,22 @@ def store_summary(app_id: str, summary: dict) -> bool:
 
 
 def get_summary_from_db(app_id: str) -> Optional[dict]:
-    """Return the latest summary for an app, or None."""
+    """Return the latest summary for an app (with generated_at), or None."""
     client = _get_supabase()
     if not client:
         return None
     try:
         result = (
             client.table("summaries")
-            .select("summary")
+            .select("summary,updated_at")
             .eq("app_id", app_id)
             .single()
             .execute()
         )
         if result.data:
-            return result.data.get("summary")
+            summary = result.data.get("summary") or {}
+            summary["generated_at"] = result.data.get("updated_at")
+            return summary
     except Exception:
         pass
     return None
