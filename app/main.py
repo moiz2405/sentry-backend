@@ -830,16 +830,21 @@ async def chat_with_logs(
     gemini_history = []
     for msg in stored:
         role = "model" if msg.get("role") == "assistant" else "user"
-        gemini_history.append({"role": role, "parts": [msg.get("content", "")]})
+        gemini_history.append({"role": role, "parts": [{"text": msg.get("content", "")}]})
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(
-            model_name=GEMINI_CHAT_MODEL,
-            system_instruction=system_prompt,
+        from google import genai
+        from google.genai import types as genai_types
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        chat = client.chats.create(
+            model=GEMINI_CHAT_MODEL,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.2,
+                max_output_tokens=1500,
+            ),
+            history=gemini_history,
         )
-        chat = model.start_chat(history=gemini_history)
         response = chat.send_message(request.message)
         answer = response.text
     except Exception as exc:
