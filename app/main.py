@@ -94,6 +94,8 @@ TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
 
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
+
 SDK_VERIFICATION_BASE_URL = os.environ.get(
     "SDK_VERIFICATION_BASE_URL", "http://localhost:3000"
 ).rstrip("/")
@@ -914,7 +916,41 @@ def _post_webhook(payload: dict) -> tuple[bool, str]:
         return False, f"failed:{type(exc).__name__}"
 
 
-# ── Email ─────────────────────────────────────────────────────────────────────
+# ── Email via Resend REST API ─────────────────────────────────────────────────
+
+def _send_resend(app_id: str, subject: str, body_lines: list) -> tuple[bool, str]:
+    """Send email via Resend REST API. No SMTP config needed — just RESEND_API_KEY."""
+    if not RESEND_API_KEY:
+        return False, "not_configured"
+    recipients = EMAIL_ALERT_TO or get_alert_recipient_emails(app_id)
+    if not recipients:
+        return False, "not_configured:missing_recipient"
+    if not EMAIL_ALERT_FROM:
+        return False, "not_configured:missing_from"
+    try:
+        body = json.dumps({
+            "from":    EMAIL_ALERT_FROM,
+            "to":      recipients,
+            "subject": subject,
+            "text":    "\n".join(body_lines),
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=body,
+            method="POST",
+            headers={
+                "Content-Type":  "application/json",
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+        return True, "sent"
+    except Exception as exc:
+        return False, f"failed:{type(exc).__name__}"
+
+
+# ── Email via SMTP (fallback when RESEND_API_KEY not set) ─────────────────────
 
 def _send_email(app_id: str, subject: str, body_lines: list) -> tuple[bool, str]:
     recipients = EMAIL_ALERT_TO or get_alert_recipient_emails(app_id)
@@ -999,7 +1035,7 @@ def _notify_all(
         fields=dc_fields,
     )
 
-    # ── Email ─────────────────────────────────────────────────
+    # ── Email (Resend preferred, falls back to SMTP) ──────────
     email_body = [
         title,
         "=" * len(title),
@@ -1014,11 +1050,11 @@ def _notify_all(
         "",
         "Open your Sentry dashboard → Anomalies tab for full details.",
     ]
-    email_ok, email_status = _send_email(
-        app_id=app_id,
-        subject=f"[Sentry] [{sev_upper}] {title}",
-        body_lines=email_body,
-    )
+    email_subject = f"[Sentry] [{sev_upper}] {title}"
+    if RESEND_API_KEY:
+        email_ok, email_status = _send_resend(app_id, email_subject, email_body)
+    else:
+        email_ok, email_status = _send_email(app_id, email_subject, email_body)
 
     # ── Generic webhook ───────────────────────────────────────
     if webhook_payload:
