@@ -521,42 +521,88 @@ _LOG_PATTERN = re.compile(
 #   4. HTTP verb + URL path (e.g. POST /payment/charge)
 #   5. Domain keyword dictionary
 
+# Logger names that are generic/meaningless — always run message-based inference
+_NOISE_LOGGER_NAMES = {
+    "root", "main", "__main__", "app", "application", "python",
+    "script", "server", "worker", "task", "logger", "log", "default",
+    "console", "stdout", "stderr",
+}
+
 _LOGGER_MAP: dict = {
     "uvicorn":          "api",
+    "gunicorn":         "api",
     "django.request":   "api",
     "django.db":        "database",
     "django.security":  "auth",
     "sqlalchemy":       "database",
     "alembic":          "database",
     "psycopg2":         "database",
+    "asyncpg":          "database",
     "pymongo":          "database",
+    "motor":            "database",
     "celery":           "queue",
     "kombu":            "queue",
+    "rq":               "queue",
     "stripe":           "payment",
     "boto3":            "storage",
     "botocore":         "storage",
+    "s3transfer":       "storage",
     "paramiko":         "ssh",
     "smtplib":          "email",
     "redis":            "cache",
     "aioredis":         "cache",
+    "httpx":            "api",
+    "httpcore":         "api",
+    "requests":         "api",
+    "urllib3":          "api",
+    "jwt":              "auth",
+    "passlib":          "auth",
+    "authlib":          "auth",
 }
 
+# Keyword scoring — check message text to infer service domain.
+# Ordered specifically so longer/more-specific phrases are checked first
+# within each service to avoid false partial-match wins.
 _SERVICE_KEYWORDS: dict = {
-    "database":  ["database", "db error", "postgres", "mysql", "sqlite", "mongodb",
-                  "connection pool", "query failed", "migration", "sqlalchemy", "orm"],
-    "auth":      ["auth", "authentication", "login", "logout", "jwt", "oauth",
-                  "session expired", "invalid token", "unauthorized", "forbidden",
-                  "permission denied", "sign in", "signup", "password"],
-    "payment":   ["payment", "stripe", "billing", "invoice", "charge", "refund",
-                  "transaction", "checkout", "subscription"],
-    "api":       ["api", "endpoint", "http error", "status code", "rest",
-                  "graphql", "webhook", "request failed"],
-    "cache":     ["cache miss", "cache hit", "cache error", "redis", "memcache", "ttl"],
-    "queue":     ["queue", "worker", "celery", "rabbitmq", "kafka", "job failed",
-                  "task retry", "message broker"],
-    "email":     ["smtp", "sendgrid", "mailgun", "send mail", "email failed"],
-    "storage":   ["s3", "bucket", "upload failed", "object store", "blob storage"],
-    "scheduler": ["cron", "scheduled task", "periodic task"],
+    "database":  [
+        "db connection", "connection failed", "connection timeout", "connection refused",
+        "connection pool", "database", "db error", "db timeout", "db unavailable",
+        "query failed", "query error", "transaction failed", "deadlock",
+        "postgres", "postgresql", "mysql", "sqlite", "mongodb", "dynamodb",
+        "migration", "sqlalchemy", "orm", "schema error",
+        " db ", " sql ",
+    ],
+    "auth":      [
+        "user signed in", "user logged in", "user logged out", "user registered",
+        "signed in", "signed up", "sign in", "sign up", "signin", "signup",
+        "login failed", "login success", "logout",
+        "auth", "authentication", "jwt", "oauth", "token expired",
+        "session expired", "invalid token", "access token", "refresh token",
+        "unauthorized", "forbidden", "permission denied", "access denied",
+        "user not found", "wrong password", "password reset",
+    ],
+    "payment":   [
+        "payment failed", "payment success", "payment retry", "payment error",
+        "payment", "stripe", "billing", "invoice", "charge failed", "charge",
+        "refund", "transaction", "checkout", "subscription", "webhook",
+    ],
+    "api":       [
+        "http error", "request failed", "response error", "status code",
+        "api", "endpoint", "rest", "graphql", "timeout", "rate limit",
+        "bad gateway", "service unavailable", "502", "503", "504",
+    ],
+    "cache":     [
+        "cache miss", "cache hit", "cache error", "cache expired",
+        "redis", "memcache", "memcached", "ttl expired",
+    ],
+    "queue":     [
+        "job failed", "task failed", "task retry", "queue full",
+        "queue", "worker", "celery", "rabbitmq", "kafka",
+        "message broker", "consumer", "producer",
+    ],
+    "email":     ["smtp", "sendgrid", "mailgun", "send mail", "email failed", "email sent"],
+    "storage":   ["s3", "bucket", "upload failed", "object store", "blob storage", "cdn"],
+    "scheduler": ["cron", "scheduled task", "periodic task", "job scheduled"],
 }
 
 _MODULE_PATH_RE = re.compile(r"\b([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){1,})\b")
@@ -569,16 +615,28 @@ _GENERIC_PARTS = {"app", "apps", "src", "lib", "core", "utils", "helpers",
 
 
 def _infer_service(message: str, raw: str) -> Optional[str]:
-    """Infer a service/domain name from a log line with no explicit service tag."""
+    """
+    Infer a service/domain name from a log line with no explicit service tag.
+
+    Priority order:
+      1. Known logger library prefix (sqlalchemy, celery, stripe …)
+      2. Dotted module path in message (app.payments.service)
+      3. Python stack-trace file path  (File "app/auth/tokens.py")
+      4. HTTP verb + URL path          (POST /payment/charge)
+      5. Keyword scoring               — picks the service with the most hits
+    """
     text = raw or message
-    lower = text.lower()
+    msg_lower  = message.lower()
+    text_lower = text.lower()
 
     # 1. Known logger prefix
     for prefix, svc in _LOGGER_MAP.items():
-        if lower.startswith(prefix + ".") or lower.startswith(prefix + ":") or f" {prefix}." in lower:
+        if (text_lower.startswith(prefix + ".")
+                or text_lower.startswith(prefix + ":")
+                or f" {prefix}." in text_lower):
             return svc
 
-    # 2. Dotted module path — take first meaningful component after generic prefixes
+    # 2. Dotted module path
     for m in _MODULE_PATH_RE.finditer(text):
         parts = [p for p in m.group(1).split(".") if p not in _GENERIC_PARTS and len(p) > 2]
         if parts:
@@ -586,7 +644,7 @@ def _infer_service(message: str, raw: str) -> Optional[str]:
             if candidate and len(candidate) > 2:
                 return candidate
 
-    # 3. Python stacktrace file path — second-to-last directory component
+    # 3. Python stacktrace file path
     m = _FILE_PATH_RE.search(text)
     if m:
         segments = m.group(1).replace("\\", "/").split("/")
@@ -594,18 +652,22 @@ def _infer_service(message: str, raw: str) -> Optional[str]:
             if seg not in _GENERIC_PARTS and len(seg) > 2:
                 return seg
 
-    # 4. HTTP verb + URL path — take the first path segment
+    # 4. HTTP verb + URL path
     m = _URL_PATH_RE.search(text)
     if m:
-        seg = m.group(1).rstrip("s")   # /payments → payment, /users → user
+        seg = m.group(1).rstrip("s")
         if len(seg) > 2:
             return seg
 
-    # 5. Domain keyword matching
+    # 5. Keyword scoring — return the domain with the most keyword hits
+    # Check both the raw line and just the message text
+    scores: dict[str, int] = {}
     for service, keywords in _SERVICE_KEYWORDS.items():
         for kw in keywords:
-            if kw in lower:
-                return service
+            if kw in msg_lower or kw in text_lower:
+                scores[service] = scores.get(service, 0) + 1
+    if scores:
+        return max(scores, key=lambda s: scores[s])
 
     return None
 
@@ -634,9 +696,11 @@ def _parse_log_line(raw: str, app_id: str) -> dict:
         message = stripped
         logged_at = datetime.now(timezone.utc).isoformat()
 
-    # Fall back to inference when no explicit [ServiceName] tag
-    if service is None:
-        service = _infer_service(message, stripped)
+    # Treat noise logger names (root, main, __main__ …) the same as absent —
+    # always infer a meaningful domain from the message text instead.
+    if service is None or service.lower() in _NOISE_LOGGER_NAMES:
+        inferred = _infer_service(message, stripped)
+        service = inferred  # may still be None if no signal found
 
     return {
         "app_id": app_id,
@@ -699,24 +763,32 @@ def _run_anomaly_detection(app_id: str) -> None:
     """Fetch recent logs, run all detectors, persist new anomalies. Runs in a daemon thread."""
     try:
         logs = get_logs_since(app_id, minutes=90, limit=1000)
-        if logs:
-            found = detect_anomalies(logs)
-            if found:
-                saved = save_anomalies(app_id, found)
-                if saved > 0:
-                    for a in found:
-                        if a.get("severity") in ("high", "critical"):
-                            atype = a.get("type", "").replace("_", " ").title()
-                            _notify_all(
-                                app_id=app_id,
-                                title=a.get("title", "Anomaly detected"),
-                                summary=a.get("summary", ""),
-                                severity=a.get("severity", "high"),
-                                services=a.get("services_affected", []),
-                                extra_lines=[f"Type: {atype}"],
-                            )
-    except Exception:
-        pass
+        print(f"[anomaly] {app_id}: fetched {len(logs)} logs", flush=True)
+        if not logs:
+            return
+        found = detect_anomalies(logs)
+        print(f"[anomaly] {app_id}: detected {len(found)} anomaly/anomalies: "
+              f"{[a['type'] for a in found]}", flush=True)
+        if not found:
+            return
+        saved = save_anomalies(app_id, found)
+        print(f"[anomaly] {app_id}: saved {saved} (others suppressed by cooldown)", flush=True)
+        if saved > 0:
+            for a in found:
+                if a.get("severity") in ("high", "critical"):
+                    atype = a.get("type", "").replace("_", " ").title()
+                    _notify_all(
+                        app_id=app_id,
+                        title=a.get("title", "Anomaly detected"),
+                        summary=a.get("summary", ""),
+                        severity=a.get("severity", "high"),
+                        services=a.get("services_affected", []),
+                        extra_lines=[f"Type: {atype}"],
+                    )
+    except Exception as exc:
+        import traceback
+        print(f"[anomaly] ERROR for {app_id}: {exc}", flush=True)
+        traceback.print_exc()
 
 
 # ============================================================

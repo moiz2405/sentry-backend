@@ -86,8 +86,17 @@ def detect_anomalies(logs: List[dict], now: Optional[datetime] = None) -> List[d
     results += _error_spike(recent, historical)
     results += _volume_surge(last_hour, now)
     results += _new_error_pattern(recent, historical)
+    results += _repeated_error_burst(recent)
     results += _cascade_failure(recent)
-    return results
+
+    # Deduplicate by type — keep highest severity for each
+    _SEV = {"critical": 3, "high": 2, "medium": 1, "low": 0}
+    best: dict[str, dict] = {}
+    for r in results:
+        t = r["type"]
+        if t not in best or _SEV.get(r["severity"], 0) > _SEV.get(best[t]["severity"], 0):
+            best[t] = r
+    return list(best.values())
 
 
 # ── Detector 1: Error rate spike ──────────────────────────────────────────────
@@ -105,8 +114,8 @@ def _error_spike(recent: list, historical: list) -> list:
     else:
         baseline_rate = 0.0
 
-    # Must be 2× baseline (or 15% floor) AND at least 3 errors
-    threshold = max(baseline_rate * 2.0, 0.15)
+    # Must be 2× baseline (or 10% floor) AND at least 3 errors
+    threshold = max(baseline_rate * 2.0, 0.10)
     if recent_rate < threshold or len(recent_errors) < 3:
         return []
 
@@ -223,7 +232,67 @@ def _new_error_pattern(recent: list, historical: list) -> list:
     }]
 
 
-# ── Detector 4: Cascade failure ───────────────────────────────────────────────
+# ── Detector 4: Repeated error burst ─────────────────────────────────────────
+# Fires when the SAME error message (normalised) appears 3+ times within 60 s.
+# This catches things like "DB connection failed × 7 in 1 s" that error_spike
+# might miss when the overall log volume is low.
+
+def _repeated_error_burst(recent: list) -> list:
+    errors = [l for l in recent if l.get("level", "").upper() in _ERROR_LEVELS]
+    if len(errors) < 3:
+        return []
+
+    # Group by fingerprint, collect timestamps
+    groups: dict[str, list] = {}
+    for l in errors:
+        fp = _fingerprint(l.get("message", ""))
+        groups.setdefault(fp, []).append(l)
+
+    results = []
+    for fp, group in groups.items():
+        if len(group) < 3:
+            continue
+        times = sorted(l["_ts"] for l in group)
+        # Sliding 60-s window
+        max_in_window = 0
+        for i, start in enumerate(times):
+            window_end = start + timedelta(seconds=60)
+            count = sum(1 for t in times[i:] if t <= window_end)
+            if count > max_in_window:
+                max_in_window = count
+
+        if max_in_window < 3:
+            continue
+
+        span = (times[-1] - times[0]).total_seconds()
+        sample = group[0].get("message", "")[:200]
+        services = _services(group)
+        severity = "critical" if max_in_window >= 10 else "high"
+
+        results.append({
+            "type":              "repeated_error_burst",
+            "severity":          severity,
+            "title":             f"Error repeated {max_in_window}× in 60 s: \"{sample[:60]}{'…' if len(sample) > 60 else ''}\"",
+            "summary":           (
+                f"The error **\"{sample[:120]}{'…' if len(sample) > 120 else ''}\"** "
+                f"occurred **{max_in_window} times** within 60 seconds "
+                f"(total {len(group)} times over {span:.0f}s). "
+                f"Services: {', '.join(services[:4])}."
+            ),
+            "services_affected": services,
+            "evidence": {
+                "error_message":    sample,
+                "count_in_60s":     max_in_window,
+                "total_count":      len(group),
+                "span_seconds":     round(span, 1),
+                "fingerprint":      fp,
+            },
+        })
+
+    return results
+
+
+# ── Detector 5: Cascade failure ───────────────────────────────────────────────
 
 def _cascade_failure(recent: list) -> list:
     # First time each service appeared with an error in the recent window
