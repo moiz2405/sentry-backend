@@ -434,6 +434,19 @@ async def get_logs(
     if not verify_app_ownership(app_id, user_id):
         raise HTTPException(status_code=404, detail="App not found")
     logs = get_logs_paginated(app_id, limit=limit, offset=offset, level=level, service=service)
+
+    # Back-fill service for old logs stored with noise names (root, main …)
+    # This is read-time only — does not modify the DB.
+    for log in logs:
+        svc = log.get("service")
+        if svc is None or svc.lower() in _NOISE_LOGGER_NAMES:
+            inferred = _infer_service(
+                log.get("message", ""),
+                log.get("raw") or log.get("message", ""),
+            )
+            if inferred:
+                log["service"] = inferred
+
     return {"logs": logs, "count": len(logs)}
 
 
@@ -696,11 +709,15 @@ def _parse_log_line(raw: str, app_id: str) -> dict:
         message = stripped
         logged_at = datetime.now(timezone.utc).isoformat()
 
-    # Treat noise logger names (root, main, __main__ …) the same as absent —
-    # always infer a meaningful domain from the message text instead.
-    if service is None or service.lower() in _NOISE_LOGGER_NAMES:
-        inferred = _infer_service(message, stripped)
-        service = inferred  # may still be None if no signal found
+    # Message content is the most reliable signal for functional domain
+    # (database, auth, payment …). Always try it first.
+    # Only keep the logger tag when inference finds nothing AND the tag
+    # itself isn't a generic/noise name.
+    inferred = _infer_service(message, stripped)
+    if inferred:
+        service = inferred
+    elif service and service.lower() in _NOISE_LOGGER_NAMES:
+        service = None  # noise tag + no message signal → unknown
 
     return {
         "app_id": app_id,
