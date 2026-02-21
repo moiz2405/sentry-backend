@@ -60,14 +60,22 @@ def generate_user_code() -> str:
 # Users
 # ============================================================
 
-def upsert_user(user_id: str, email: str, name: Optional[str], image: Optional[str]) -> bool:
+def upsert_user(user_id: str, email: str, name: Optional[str], image: Optional[str]) -> Optional[str]:
     """
-    Upsert a user row. Called by POST /users/sync after Google OAuth.
-    user_id is the Google sub (string, not UUID).
+    Upsert a user row and return the canonical user ID stored in the DB.
+
+    Returns the canonical ID on success, None on failure.
+
+    Strategy:
+    1. Happy path — upsert on `id` (repeated logins, new users).
+    2. Email conflict (stale UUID from a previous Auth.js session) — find the
+       existing row by email, update name/image, and return the existing ID.
+       We never change the PRIMARY KEY because apps.user_id has no ON UPDATE CASCADE.
     """
     client = _get_supabase()
     if not client:
-        return False
+        return None
+
     try:
         client.table("users").upsert(
             {
@@ -79,9 +87,30 @@ def upsert_user(user_id: str, email: str, name: Optional[str], image: Optional[s
             },
             on_conflict="id",
         ).execute()
-        return True
+        return user_id
     except Exception:
-        return False
+        pass
+
+    # Fallback: email already exists under a different id.
+    # supabase-py's SyncFilterRequestBuilder does not support chaining .select()
+    # after .update().eq() — split into two separate queries.
+    try:
+        client.table("users").update(
+            {"name": name, "image": image, "updated_at": _now_utc().isoformat()}
+        ).eq("email", email).execute()
+        result = (
+            client.table("users")
+            .select("id")
+            .eq("email", email)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            return result.data[0]["id"]
+    except Exception:
+        pass
+
+    return None
 
 
 # ============================================================
