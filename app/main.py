@@ -1,8 +1,10 @@
+import asyncio
 import os
 import re
 import ssl
 import smtplib
 import json
+import threading
 import urllib.request
 import urllib.parse
 from datetime import datetime, timezone
@@ -11,6 +13,7 @@ from typing import List, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.models.smart_log_processor import process_and_summarize_stream
@@ -793,7 +796,7 @@ async def chat_with_logs(
     request: ChatRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Send a message. History is loaded from / saved to DB — no client-side state needed."""
+    """Send a message and stream the reply token-by-token (text/plain SSE chunks)."""
     if not verify_app_ownership(app_id, user_id):
         raise HTTPException(status_code=404, detail="App not found")
     if not GEMINI_API_KEY:
@@ -802,9 +805,7 @@ async def chat_with_logs(
             detail="Chat is not configured — add GEMINI_API_KEY to your backend environment.",
         )
 
-    # Load persisted history from DB
     stored = get_app_chat(app_id)
-
     logs = get_logs_paginated(app_id, limit=300, offset=0)
     context = _build_log_context(logs)
 
@@ -826,8 +827,6 @@ async def chat_with_logs(
         "5. If logs are insufficient, say so and suggest what to add."
     )
 
-    # Build conversation contents for Gemini REST API
-    # History: prior turns, then the new user message at the end
     contents = []
     for msg in stored:
         role = "model" if msg.get("role") == "assistant" else "user"
@@ -840,33 +839,62 @@ async def chat_with_logs(
         "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1500},
     }
 
-    try:
-        gemini_url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{GEMINI_CHAT_MODEL}:generateContent?key={GEMINI_API_KEY}"
-        )
-        body = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            gemini_url,
-            data=body,
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-        answer = result["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Chat failed: {exc!r}")
+    gemini_url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{GEMINI_CHAT_MODEL}:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
+    )
+    body_bytes = json.dumps(payload).encode("utf-8")
 
-    # Persist updated history
-    now = _utc_now_iso()
-    updated = stored + [
-        {"role": "user", "content": request.message, "ts": now},
-        {"role": "assistant", "content": answer, "ts": now},
-    ]
-    # Cap at 100 messages (50 exchanges) to avoid unbounded growth
-    if len(updated) > 100:
-        updated = updated[-100:]
-    save_app_chat(app_id, updated)
+    # Use a thread + asyncio.Queue so the blocking urllib stream doesn't stall the event loop
+    loop = asyncio.get_event_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+    full_answer: list = []
 
-    return {"answer": answer, "logs_analyzed": len(logs)}
+    def _producer():
+        try:
+            req = urllib.request.Request(
+                gemini_url,
+                data=body_bytes,
+                method="POST",
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                for raw_line in resp:
+                    line = raw_line.decode("utf-8").rstrip()
+                    if not line.startswith("data: "):
+                        continue
+                    data_str = line[6:]
+                    try:
+                        chunk_json = json.loads(data_str)
+                        text = chunk_json["candidates"][0]["content"]["parts"][0]["text"]
+                        if text:
+                            full_answer.append(text)
+                            loop.call_soon_threadsafe(queue.put_nowait, text)
+                    except (KeyError, json.JSONDecodeError):
+                        pass
+        except Exception as exc:
+            loop.call_soon_threadsafe(queue.put_nowait, f"\n\n[Error: {exc!r}]")
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
+
+    threading.Thread(target=_producer, daemon=True).start()
+
+    async def _stream():
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            yield chunk
+
+        # Persist full conversation after streaming completes
+        answer = "".join(full_answer)
+        now = _utc_now_iso()
+        updated = stored + [
+            {"role": "user", "content": request.message, "ts": now},
+            {"role": "assistant", "content": answer, "ts": now},
+        ]
+        if len(updated) > 100:
+            updated = updated[-100:]
+        save_app_chat(app_id, updated)
+
+    return StreamingResponse(_stream(), media_type="text/plain")
