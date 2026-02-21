@@ -580,15 +580,6 @@ async def sdk_device_complete(request: DeviceCompleteRequest):
         if canonical:
             user_id = canonical
 
-    # #region agent log
-    try:
-        import json as _json, time as _time
-        with open("debug-8df084.log", "a") as _f:
-            _f.write(_json.dumps({"sessionId":"8df084","location":"main.py:sdk_device_complete","message":"complete called","data":{"orig_user_id":request.user_id,"resolved_user_id":user_id,"has_email":bool(request.user_email)},"timestamp":int(_time.time()*1000)}) + "\n")
-    except Exception:
-        pass
-    # #endregion
-
     result = complete_device_session(
         device_code=request.device_code.strip(),
         user_id=user_id,

@@ -88,10 +88,7 @@ def upsert_user(user_id: str, email: str, name: Optional[str], image: Optional[s
             on_conflict="id",
         ).execute()
         return user_id
-    except Exception as exc:
-        # #region agent log
-        print(f"[upsert_user] primary upsert failed: {exc!r}")
-        # #endregion
+    except Exception:
         pass
 
     # Fallback: email already exists under a different id.
@@ -110,13 +107,7 @@ def upsert_user(user_id: str, email: str, name: Optional[str], image: Optional[s
         )
         if result.data:
             return result.data[0]["id"]
-        # #region agent log
-        print(f"[upsert_user] fallback select returned no rows for email={email!r}")
-        # #endregion
-    except Exception as exc:
-        # #region agent log
-        print(f"[upsert_user] fallback failed: {exc!r}")
-        # #endregion
+    except Exception:
         pass
 
     return None
@@ -383,40 +374,25 @@ def complete_device_session(
     Complete onboarding: create app + api_key, store on device session.
     Returns {'app_id', 'api_key', 'app_name'} or None.
     """
-    import json as _json, time as _time  # noqa: E402
-
-    def _dbg(msg: str, data: dict) -> None:
-        try:
-            with open("debug-8df084.log", "a") as _f:
-                _f.write(_json.dumps({"sessionId": "8df084", "location": "api_key.py:complete_device_session", "message": msg, "data": data, "timestamp": int(_time.time() * 1000)}) + "\n")
-        except Exception:
-            pass
-
     client = _get_supabase()
     if not client:
-        _dbg("no supabase client", {})
         return None
 
     session = get_device_session(device_code)
     if not session:
-        _dbg("no session found", {"device_code": device_code})
         return None
     if session.get("status") != "pending":
-        _dbg("session not pending", {"status": session.get("status")})
         return None
     expires_at = session.get("expires_at")
     if not expires_at:
-        _dbg("no expires_at", {})
         return None
     if _now_utc() >= _parse_utc(expires_at):
         mark_device_session_expired(device_code)
-        _dbg("session expired", {"expires_at": expires_at})
         return None
 
     app_name = (app_name_override or session.get("app_name") or "").strip() or "My App"
     description = (session.get("description") or "").strip() or None
     api_key = generate_api_key()
-    _dbg("about to insert app", {"user_id": user_id, "app_name": app_name})
 
     try:
         app_result = (
@@ -433,7 +409,6 @@ def complete_device_session(
         )
         app = app_result.data[0] if app_result.data else None
         if not app:
-            _dbg("app insert returned no data", {})
             return None
 
         client.table("sdk_device_sessions").update(
@@ -446,13 +421,8 @@ def complete_device_session(
             }
         ).eq("device_code", device_code).execute()
 
-        _dbg("success", {"app_id": str(app["id"])})
         return {"app_id": str(app["id"]), "api_key": api_key, "app_name": app["name"]}
-    except Exception as exc:
-        _dbg("exception during app insert", {"error": repr(exc)})
-        # #region agent log
-        print(f"[complete_device_session] app insert exception: {exc!r}")
-        # #endregion
+    except Exception:
         return None
 
 
