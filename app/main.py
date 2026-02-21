@@ -16,15 +16,18 @@ from pydantic import BaseModel
 from app.models.smart_log_processor import process_and_summarize_stream
 from app.core.api_key import (
     bulk_insert_logs,
+    clear_app_chat,
     complete_device_session,
     generate_api_key,
     get_alert_recipient_emails,
     get_analytics,
+    get_app_chat,
     get_device_session,
     get_logs_paginated,
     get_summary_from_db,
     mark_device_session_expired,
     resolve_api_key_to_app_id,
+    save_app_chat,
     start_device_session,
     store_summary,
     upsert_user,
@@ -61,7 +64,7 @@ app.add_middleware(
 # ============================================================
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
-GEMINI_CHAT_MODEL = "gemini-1.5-flash"
+GEMINI_CHAT_MODEL = "gemini-2.5-flash"
 
 RISK_ALERT_WEBHOOK_URL = os.environ.get("RISK_ALERT_WEBHOOK_URL", "").strip()
 NOTIFICATION_COOLDOWN_SECONDS = int(os.environ.get("NOTIFICATION_COOLDOWN_SECONDS", "300"))
@@ -133,14 +136,8 @@ class DeviceCompleteRequest(BaseModel):
     user_image: Optional[str] = None
 
 
-class ChatMessage(BaseModel):
-    role: str  # "user" | "assistant"
-    content: str
-
-
 class ChatRequest(BaseModel):
     message: str
-    history: Optional[List[ChatMessage]] = []
 
 
 # ============================================================
@@ -734,19 +731,17 @@ def _trigger_risk_notifications(app_id: str, dashboard: dict) -> list[dict]:
 
 
 # ============================================================
-# Log Chat (Ask your logs)
+# Log Chat (Ask your logs — persistent, DB-backed)
 # ============================================================
 
 def _build_log_context(logs: list) -> str:
     """Compress recent logs into a structured context string for the LLM."""
     if not logs:
         return "No logs available yet."
-
     by_service: dict = {}
     for log in logs:
         svc = log.get("service") or "app"
         by_service.setdefault(svc, []).append(log)
-
     lines = []
     for svc in sorted(by_service):
         svc_logs = by_service[svc]
@@ -756,7 +751,6 @@ def _build_log_context(logs: list) -> str:
             counts[lvl] = counts.get(lvl, 0) + 1
         count_str = "  ".join(f"{k}:{v}" for k, v in counts.items())
         lines.append(f"\n=== SERVICE: {svc} ({count_str}) ===")
-        # Most recent 25 logs per service, errors/warnings first
         prioritized = sorted(
             svc_logs,
             key=lambda l: (0 if l.get("level") in ("CRITICAL", "ERROR", "WARNING") else 1, l.get("logged_at", "")),
@@ -766,8 +760,31 @@ def _build_log_context(logs: list) -> str:
             lvl = lg.get("level", "INFO")
             msg = (lg.get("message") or "")[:250]
             lines.append(f"  {ts} [{lvl}] {msg}")
-
     return "\n".join(lines)
+
+
+@app.get("/chat/{app_id}")
+async def get_chat_history(
+    app_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Return the stored chat history for an app."""
+    if not verify_app_ownership(app_id, user_id):
+        raise HTTPException(status_code=404, detail="App not found")
+    messages = get_app_chat(app_id)
+    return {"messages": messages}
+
+
+@app.delete("/chat/{app_id}")
+async def delete_chat_history(
+    app_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Clear the chat history for an app."""
+    if not verify_app_ownership(app_id, user_id):
+        raise HTTPException(status_code=404, detail="App not found")
+    clear_app_chat(app_id)
+    return {"status": "cleared"}
 
 
 @app.post("/chat/{app_id}")
@@ -776,7 +793,7 @@ async def chat_with_logs(
     request: ChatRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Natural-language Q&A over the app's recent logs using Groq LLM."""
+    """Send a message. History is loaded from / saved to DB — no client-side state needed."""
     if not verify_app_ownership(app_id, user_id):
         raise HTTPException(status_code=404, detail="App not found")
     if not GEMINI_API_KEY:
@@ -785,30 +802,35 @@ async def chat_with_logs(
             detail="Chat is not configured — add GEMINI_API_KEY to your backend environment.",
         )
 
+    # Load persisted history from DB
+    stored = get_app_chat(app_id)
+
     logs = get_logs_paginated(app_id, limit=300, offset=0)
     context = _build_log_context(logs)
 
     system_prompt = (
         "You are an expert log analysis assistant embedded in a production monitoring platform.\n"
-        "A developer is asking you about their application's recent logs.\n\n"
-        f"RECENT LOGS (last {len(logs)} entries, grouped by service):\n"
+        "Always format your responses in Markdown:\n"
+        "- Use **bold** for service names, timestamps, and key terms.\n"
+        "- Use `inline code` for log levels and error messages.\n"
+        "- Use ## for section headers (Root Cause, Symptoms, Recommendations).\n"
+        "- Use bullet lists for multiple points.\n"
+        "- Keep responses focused and actionable — developers are in the middle of incidents.\n\n"
+        f"RECENT LOGS ({len(logs)} entries, grouped by service):\n"
         f"{context}\n\n"
-        "Guidelines:\n"
-        "- Cite specific log lines (with timestamps) when explaining issues.\n"
-        "- Identify cascading failures — trace which service triggered what.\n"
-        "- Focus on root causes, not just symptoms.\n"
-        "- Give actionable suggestions (code-level when possible).\n"
-        "- If logs are insufficient to answer, say so and suggest what to instrument.\n"
-        "- Be concise — developers are in the middle of an incident."
+        "When answering:\n"
+        "1. Cite specific log lines with their timestamps.\n"
+        "2. Identify cascading failures — which service triggered what.\n"
+        "3. Give the root cause, not just symptoms.\n"
+        "4. Suggest concrete fixes (code-level where possible).\n"
+        "5. If logs are insufficient, say so and suggest what to add."
     )
 
-    # Gemini uses "model" for assistant role, and history is separate from the message
-    history = []
-    for h in (request.history or []):
-        if h.role == "user":
-            history.append({"role": "user", "parts": [h.content]})
-        elif h.role == "assistant":
-            history.append({"role": "model", "parts": [h.content]})
+    # Build Gemini history from stored messages (role: user → user, assistant → model)
+    gemini_history = []
+    for msg in stored:
+        role = "model" if msg.get("role") == "assistant" else "user"
+        gemini_history.append({"role": role, "parts": [msg.get("content", "")]})
 
     try:
         import google.generativeai as genai
@@ -817,10 +839,21 @@ async def chat_with_logs(
             model_name=GEMINI_CHAT_MODEL,
             system_instruction=system_prompt,
         )
-        chat = model.start_chat(history=history)
+        chat = model.start_chat(history=gemini_history)
         response = chat.send_message(request.message)
         answer = response.text
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Chat failed: {exc!r}")
+
+    # Persist updated history
+    now = _utc_now_iso()
+    updated = stored + [
+        {"role": "user", "content": request.message, "ts": now},
+        {"role": "assistant", "content": answer, "ts": now},
+    ]
+    # Cap at 100 messages (50 exchanges) to avoid unbounded growth
+    if len(updated) > 100:
+        updated = updated[-100:]
+    save_app_chat(app_id, updated)
 
     return {"answer": answer, "logs_analyzed": len(logs)}

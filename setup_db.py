@@ -24,7 +24,7 @@ MIGRATION_FILE = os.path.join(
     os.path.dirname(__file__), "..", "supabase", "migrations", "20260220000000_full_schema.sql"
 )
 
-REQUIRED_TABLES = ["users", "apps", "logs", "summaries", "sdk_device_sessions"]
+REQUIRED_TABLES = ["users", "apps", "logs", "summaries", "sdk_device_sessions", "app_chats"]
 
 
 def _headers():

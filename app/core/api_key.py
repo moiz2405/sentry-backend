@@ -160,6 +160,61 @@ def verify_app_ownership(app_id: str, user_id: str) -> bool:
 
 
 # ============================================================
+# App chat (persistent conversation history per app)
+# ============================================================
+
+def get_app_chat(app_id: str) -> list:
+    """Return stored chat messages for an app (list of {role, content, ts} dicts)."""
+    client = _get_supabase()
+    if not client:
+        return []
+    try:
+        result = (
+            client.table("app_chats")
+            .select("messages")
+            .eq("app_id", app_id)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            return result.data[0].get("messages") or []
+    except Exception:
+        pass
+    return []
+
+
+def save_app_chat(app_id: str, messages: list) -> bool:
+    """Upsert chat messages for an app (one row per app via unique constraint)."""
+    client = _get_supabase()
+    if not client:
+        return False
+    try:
+        client.table("app_chats").upsert(
+            {
+                "app_id": app_id,
+                "messages": messages,
+                "updated_at": _now_utc().isoformat(),
+            },
+            on_conflict="app_id",
+        ).execute()
+        return True
+    except Exception:
+        return False
+
+
+def clear_app_chat(app_id: str) -> bool:
+    """Delete the chat history row for an app."""
+    client = _get_supabase()
+    if not client:
+        return False
+    try:
+        client.table("app_chats").delete().eq("app_id", app_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+# ============================================================
 # Logs
 # ============================================================
 
