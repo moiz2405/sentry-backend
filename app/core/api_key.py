@@ -88,7 +88,10 @@ def upsert_user(user_id: str, email: str, name: Optional[str], image: Optional[s
             on_conflict="id",
         ).execute()
         return user_id
-    except Exception:
+    except Exception as exc:
+        # #region agent log
+        print(f"[upsert_user] primary upsert failed: {exc!r}")
+        # #endregion
         pass
 
     # Fallback: email already exists under a different id.
@@ -107,7 +110,13 @@ def upsert_user(user_id: str, email: str, name: Optional[str], image: Optional[s
         )
         if result.data:
             return result.data[0]["id"]
-    except Exception:
+        # #region agent log
+        print(f"[upsert_user] fallback select returned no rows for email={email!r}")
+        # #endregion
+    except Exception as exc:
+        # #region agent log
+        print(f"[upsert_user] fallback failed: {exc!r}")
+        # #endregion
         pass
 
     return None
@@ -441,6 +450,9 @@ def complete_device_session(
         return {"app_id": str(app["id"]), "api_key": api_key, "app_name": app["name"]}
     except Exception as exc:
         _dbg("exception during app insert", {"error": repr(exc)})
+        # #region agent log
+        print(f"[complete_device_session] app insert exception: {exc!r}")
+        # #endregion
         return None
 
 
