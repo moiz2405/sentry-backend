@@ -565,6 +565,88 @@ def validate_sdk_schema() -> dict:
 # Anomaly persistence
 # ============================================================
 
+def get_log_timeline(app_id: str, window: str = "1h") -> dict:
+    """
+    Return time-bucketed log counts for the timeline chart.
+
+    window  → bucket_minutes × n_buckets
+    "1h"    → 5 min  × 12
+    "6h"    → 30 min × 12
+    "24h"   → 60 min × 24
+    "7d"    → 360 min × 28
+    """
+    CONFIGS = {
+        "1h":  {"total_min": 60,    "bucket_min": 5,   "n": 12},
+        "6h":  {"total_min": 360,   "bucket_min": 30,  "n": 12},
+        "24h": {"total_min": 1440,  "bucket_min": 60,  "n": 24},
+        "7d":  {"total_min": 10080, "bucket_min": 360, "n": 28},
+    }
+    cfg = CONFIGS.get(window, CONFIGS["1h"])
+    total_min  = cfg["total_min"]
+    bucket_min = cfg["bucket_min"]
+    n_buckets  = cfg["n"]
+
+    client = _get_supabase()
+    empty = {"buckets": [], "window": window, "bucket_size_minutes": bucket_min}
+    if not client:
+        return empty
+
+    now   = _now_utc()
+    since = (now - timedelta(minutes=total_min)).isoformat()
+
+    try:
+        result = (
+            client.table("logs")
+            .select("level,logged_at")
+            .eq("app_id", app_id)
+            .gte("logged_at", since)
+            .order("logged_at", desc=False)
+            .limit(10000)
+            .execute()
+        )
+        rows = result.data or []
+    except Exception:
+        return empty
+
+    # Build empty buckets (oldest first)
+    def _label(dt: "datetime") -> str:
+        if window in ("1h", "6h"):
+            return dt.strftime("%H:%M")
+        elif window == "24h":
+            return dt.strftime("%H:00")
+        else:
+            return dt.strftime("%a %H:00")
+
+    buckets = []
+    for i in range(n_buckets):
+        bucket_start = now - timedelta(minutes=(n_buckets - i) * bucket_min)
+        buckets.append({
+            "time":      _label(bucket_start),
+            "timestamp": bucket_start.isoformat(),
+            "total":     0,
+            "errors":    0,
+            "warnings":  0,
+        })
+
+    # Fill buckets
+    for row in rows:
+        try:
+            ts      = datetime.fromisoformat(row["logged_at"].replace("Z", "+00:00"))
+            age_min = (now - ts).total_seconds() / 60.0
+            idx     = n_buckets - 1 - int(age_min / bucket_min)
+            if 0 <= idx < n_buckets:
+                level = (row.get("level") or "").upper()
+                buckets[idx]["total"] += 1
+                if level in ("ERROR", "CRITICAL"):
+                    buckets[idx]["errors"] += 1
+                elif level == "WARNING":
+                    buckets[idx]["warnings"] += 1
+        except Exception:
+            pass
+
+    return {"buckets": buckets, "window": window, "bucket_size_minutes": bucket_min}
+
+
 def get_logs_since(app_id: str, minutes: int = 90, limit: int = 1000) -> list:
     """Return logs from the last N minutes, oldest first (for temporal analysis)."""
     client = _get_supabase()

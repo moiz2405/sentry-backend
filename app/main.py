@@ -27,6 +27,7 @@ from app.core.api_key import (
     get_anomalies,
     get_app_chat,
     get_device_session,
+    get_log_timeline,
     get_logs_paginated,
     get_logs_since,
     get_summary_from_db,
@@ -462,6 +463,22 @@ async def get_app_anomalies(
 
 
 # ============================================================
+# Log Timeline
+# ============================================================
+
+@app.get("/timeline/{app_id}")
+async def get_app_timeline(
+    app_id: str,
+    user_id: str = Depends(get_current_user_id),
+    window: str = Query("1h", regex="^(1h|6h|24h|7d)$"),
+):
+    """Return time-bucketed log counts for the interactive timeline chart."""
+    if not verify_app_ownership(app_id, user_id):
+        raise HTTPException(status_code=404, detail="App not found")
+    return get_log_timeline(app_id, window=window)
+
+
+# ============================================================
 # Summary (AI dashboard)
 # ============================================================
 
@@ -488,6 +505,103 @@ _LOG_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# ── Service inference ─────────────────────────────────────────────────────────
+# When logs have no explicit [ServiceName] tag we try to infer a functional
+# domain from the message text using four strategies in priority order:
+#   1. Known logger/library prefix → deterministic map
+#   2. Dotted module path in the message (e.g. app.payments.service)
+#   3. File path in a Python stacktrace (e.g. File "app/auth/tokens.py")
+#   4. HTTP verb + URL path (e.g. POST /payment/charge)
+#   5. Domain keyword dictionary
+
+_LOGGER_MAP: dict = {
+    "uvicorn":          "api",
+    "django.request":   "api",
+    "django.db":        "database",
+    "django.security":  "auth",
+    "sqlalchemy":       "database",
+    "alembic":          "database",
+    "psycopg2":         "database",
+    "pymongo":          "database",
+    "celery":           "queue",
+    "kombu":            "queue",
+    "stripe":           "payment",
+    "boto3":            "storage",
+    "botocore":         "storage",
+    "paramiko":         "ssh",
+    "smtplib":          "email",
+    "redis":            "cache",
+    "aioredis":         "cache",
+}
+
+_SERVICE_KEYWORDS: dict = {
+    "database":  ["database", "db error", "postgres", "mysql", "sqlite", "mongodb",
+                  "connection pool", "query failed", "migration", "sqlalchemy", "orm"],
+    "auth":      ["auth", "authentication", "login", "logout", "jwt", "oauth",
+                  "session expired", "invalid token", "unauthorized", "forbidden",
+                  "permission denied", "sign in", "signup", "password"],
+    "payment":   ["payment", "stripe", "billing", "invoice", "charge", "refund",
+                  "transaction", "checkout", "subscription"],
+    "api":       ["api", "endpoint", "http error", "status code", "rest",
+                  "graphql", "webhook", "request failed"],
+    "cache":     ["cache miss", "cache hit", "cache error", "redis", "memcache", "ttl"],
+    "queue":     ["queue", "worker", "celery", "rabbitmq", "kafka", "job failed",
+                  "task retry", "message broker"],
+    "email":     ["smtp", "sendgrid", "mailgun", "send mail", "email failed"],
+    "storage":   ["s3", "bucket", "upload failed", "object store", "blob storage"],
+    "scheduler": ["cron", "scheduled task", "periodic task"],
+}
+
+_MODULE_PATH_RE = re.compile(r"\b([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){1,})\b")
+_FILE_PATH_RE   = re.compile(r'[Ff]ile ["\']([^"\']+\.py)["\']')
+_URL_PATH_RE    = re.compile(r'(?:GET|POST|PUT|DELETE|PATCH)\s+/([a-zA-Z][a-zA-Z0-9_-]+)', re.I)
+
+_GENERIC_PARTS = {"app", "apps", "src", "lib", "core", "utils", "helpers",
+                  "common", "base", "models", "views", "tests", "main", "api",
+                  "routes", "handlers", "middleware", "config", "settings"}
+
+
+def _infer_service(message: str, raw: str) -> Optional[str]:
+    """Infer a service/domain name from a log line with no explicit service tag."""
+    text = raw or message
+    lower = text.lower()
+
+    # 1. Known logger prefix
+    for prefix, svc in _LOGGER_MAP.items():
+        if lower.startswith(prefix + ".") or lower.startswith(prefix + ":") or f" {prefix}." in lower:
+            return svc
+
+    # 2. Dotted module path — take first meaningful component after generic prefixes
+    for m in _MODULE_PATH_RE.finditer(text):
+        parts = [p for p in m.group(1).split(".") if p not in _GENERIC_PARTS and len(p) > 2]
+        if parts:
+            candidate = parts[0].rstrip("_").removesuffix("_service").removesuffix("_handler")
+            if candidate and len(candidate) > 2:
+                return candidate
+
+    # 3. Python stacktrace file path — second-to-last directory component
+    m = _FILE_PATH_RE.search(text)
+    if m:
+        segments = m.group(1).replace("\\", "/").split("/")
+        for seg in reversed(segments[:-1]):
+            if seg not in _GENERIC_PARTS and len(seg) > 2:
+                return seg
+
+    # 4. HTTP verb + URL path — take the first path segment
+    m = _URL_PATH_RE.search(text)
+    if m:
+        seg = m.group(1).rstrip("s")   # /payments → payment, /users → user
+        if len(seg) > 2:
+            return seg
+
+    # 5. Domain keyword matching
+    for service, keywords in _SERVICE_KEYWORDS.items():
+        for kw in keywords:
+            if kw in lower:
+                return service
+
+    return None
+
 
 def _parse_log_line(raw: str, app_id: str) -> dict:
     """Parse a raw SDK log string into a structured dict for DB insertion."""
@@ -502,7 +616,6 @@ def _parse_log_line(raw: str, app_id: str) -> dict:
         ts_str = m.group("timestamp").replace(",", ".")
         try:
             parsed_ts = datetime.fromisoformat(ts_str)
-            # Make timezone-aware if naive
             if parsed_ts.tzinfo is None:
                 parsed_ts = parsed_ts.replace(tzinfo=timezone.utc)
             logged_at = parsed_ts.isoformat()
@@ -513,6 +626,10 @@ def _parse_log_line(raw: str, app_id: str) -> dict:
         service = None
         message = stripped
         logged_at = datetime.now(timezone.utc).isoformat()
+
+    # Fall back to inference when no explicit [ServiceName] tag
+    if service is None:
+        service = _infer_service(message, stripped)
 
     return {
         "app_id": app_id,
@@ -571,6 +688,53 @@ async def ingest_logs(
     }
 
 
+def _send_anomaly_alert_email(app_id: str, anomaly: dict) -> None:
+    """Send an email for a high/critical anomaly using existing SMTP infrastructure."""
+    recipients = EMAIL_ALERT_TO or get_alert_recipient_emails(app_id)
+    if not recipients or not EMAIL_ALERT_FROM or not SMTP_HOST:
+        return
+
+    severity   = anomaly.get("severity", "").upper()
+    title      = anomaly.get("title", "Anomaly detected")
+    summary    = anomaly.get("summary", "")
+    services   = ", ".join(anomaly.get("services_affected", [])) or "unknown"
+    atype      = anomaly.get("type", "").replace("_", " ").title()
+
+    msg = EmailMessage()
+    msg["From"]    = EMAIL_ALERT_FROM
+    msg["To"]      = ", ".join(recipients)
+    msg["Subject"] = f"[Sentry Anomaly] [{severity}] {title}"
+    msg.set_content("\n".join([
+        f"Anomaly detected in your application",
+        "",
+        f"App ID:            {app_id}",
+        f"Type:              {atype}",
+        f"Severity:          {severity}",
+        f"Affected services: {services}",
+        "",
+        f"Summary:",
+        f"  {summary}",
+        "",
+        "Open your Sentry dashboard → Anomalies tab for full details.",
+    ]))
+
+    try:
+        if SMTP_USE_TLS:
+            ctx = ssl.create_default_context()
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+                server.starttls(context=ctx)
+                if SMTP_USERNAME:
+                    server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+                if SMTP_USERNAME:
+                    server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(msg)
+    except Exception:
+        pass
+
+
 def _run_anomaly_detection(app_id: str) -> None:
     """Fetch recent logs, run all detectors, persist new anomalies. Runs in a daemon thread."""
     try:
@@ -578,7 +742,12 @@ def _run_anomaly_detection(app_id: str) -> None:
         if logs:
             found = detect_anomalies(logs)
             if found:
-                save_anomalies(app_id, found)
+                saved = save_anomalies(app_id, found)
+                if saved > 0:
+                    # Email for high/critical anomalies (save_anomalies already de-duped)
+                    for a in found:
+                        if a.get("severity") in ("high", "critical"):
+                            _send_anomaly_alert_email(app_id, a)
     except Exception:
         pass
 
