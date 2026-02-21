@@ -60,6 +60,9 @@ app.add_middleware(
 # Config
 # ============================================================
 
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
+GROQ_CHAT_MODEL = "llama-3.3-70b-versatile"
+
 RISK_ALERT_WEBHOOK_URL = os.environ.get("RISK_ALERT_WEBHOOK_URL", "").strip()
 NOTIFICATION_COOLDOWN_SECONDS = int(os.environ.get("NOTIFICATION_COOLDOWN_SECONDS", "300"))
 
@@ -128,6 +131,16 @@ class DeviceCompleteRequest(BaseModel):
     user_email: Optional[str] = None
     user_name: Optional[str] = None
     user_image: Optional[str] = None
+
+
+class ChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: Optional[List[ChatMessage]] = []
 
 
 # ============================================================
@@ -718,3 +731,94 @@ def _trigger_risk_notifications(app_id: str, dashboard: dict) -> list[dict]:
         app_state[service] = {"last_sent_ts": now_epoch, "last_score": score, "last_level": level}
 
     return triggered
+
+
+# ============================================================
+# Log Chat (Ask your logs)
+# ============================================================
+
+def _build_log_context(logs: list) -> str:
+    """Compress recent logs into a structured context string for the LLM."""
+    if not logs:
+        return "No logs available yet."
+
+    by_service: dict = {}
+    for log in logs:
+        svc = log.get("service") or "app"
+        by_service.setdefault(svc, []).append(log)
+
+    lines = []
+    for svc in sorted(by_service):
+        svc_logs = by_service[svc]
+        counts: dict = {}
+        for lg in svc_logs:
+            lvl = lg.get("level", "INFO")
+            counts[lvl] = counts.get(lvl, 0) + 1
+        count_str = "  ".join(f"{k}:{v}" for k, v in counts.items())
+        lines.append(f"\n=== SERVICE: {svc} ({count_str}) ===")
+        # Most recent 25 logs per service, errors/warnings first
+        prioritized = sorted(
+            svc_logs,
+            key=lambda l: (0 if l.get("level") in ("CRITICAL", "ERROR", "WARNING") else 1, l.get("logged_at", "")),
+        )
+        for lg in prioritized[:25]:
+            ts = (lg.get("logged_at") or "")[:19]
+            lvl = lg.get("level", "INFO")
+            msg = (lg.get("message") or "")[:250]
+            lines.append(f"  {ts} [{lvl}] {msg}")
+
+    return "\n".join(lines)
+
+
+@app.post("/chat/{app_id}")
+async def chat_with_logs(
+    app_id: str,
+    request: ChatRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Natural-language Q&A over the app's recent logs using Groq LLM."""
+    if not verify_app_ownership(app_id, user_id):
+        raise HTTPException(status_code=404, detail="App not found")
+    if not GROQ_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="Chat is not configured — add GROQ_API_KEY to your backend environment.",
+        )
+
+    logs = get_logs_paginated(app_id, limit=300, offset=0)
+    context = _build_log_context(logs)
+
+    system_prompt = (
+        "You are an expert log analysis assistant embedded in a production monitoring platform.\n"
+        "A developer is asking you about their application's recent logs.\n\n"
+        f"RECENT LOGS (last {len(logs)} entries, grouped by service):\n"
+        f"{context}\n\n"
+        "Guidelines:\n"
+        "- Cite specific log lines (with timestamps) when explaining issues.\n"
+        "- Identify cascading failures — trace which service triggered what.\n"
+        "- Focus on root causes, not just symptoms.\n"
+        "- Give actionable suggestions (code-level when possible).\n"
+        "- If logs are insufficient to answer, say so and suggest what to instrument.\n"
+        "- Be concise — developers are in the middle of an incident."
+    )
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for h in (request.history or []):
+        if h.role in ("user", "assistant"):
+            messages.append({"role": h.role, "content": h.content})
+    messages.append({"role": "user", "content": request.message})
+
+    try:
+        from groq import Groq as GroqClient
+        client = GroqClient(api_key=GROQ_API_KEY)
+        completion = client.chat.completions.create(
+            model=GROQ_CHAT_MODEL,
+            messages=messages,
+            max_tokens=1500,
+            temperature=0.2,
+        )
+        answer = completion.choices[0].message.content
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Chat failed: {exc!r}")
+
+    return {"answer": answer, "logs_analyzed": len(logs)}
