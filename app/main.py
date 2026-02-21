@@ -24,12 +24,15 @@ from app.core.api_key import (
     generate_api_key,
     get_alert_recipient_emails,
     get_analytics,
+    get_anomalies,
     get_app_chat,
     get_device_session,
     get_logs_paginated,
+    get_logs_since,
     get_summary_from_db,
     mark_device_session_expired,
     resolve_api_key_to_app_id,
+    save_anomalies,
     save_app_chat,
     start_device_session,
     store_summary,
@@ -38,6 +41,7 @@ from app.core.api_key import (
     verify_app_ownership,
     _get_supabase,
 )
+from app.models.anomaly_detector import detect_anomalies
 
 app = FastAPI(title="Sentry Log Platform API")
 
@@ -116,6 +120,12 @@ class CreateAppRequest(BaseModel):
     user_email: Optional[str] = None
     user_name: Optional[str] = None
     user_image: Optional[str] = None
+
+
+class UpdateAppRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    url: Optional[str] = None
 
 
 class IngestRequest(BaseModel):
@@ -249,7 +259,7 @@ async def list_apps(user_id: str = Depends(get_current_user_id)):
     try:
         result = (
             client.table("apps")
-            .select("id,user_id,name,description,api_key,created_at,updated_at")
+            .select("id,user_id,name,description,url,api_key,created_at,updated_at")
             .eq("user_id", user_id)
             .order("created_at", desc=True)
             .execute()
@@ -268,7 +278,7 @@ async def get_app(app_id: str, user_id: str = Depends(get_current_user_id)):
     try:
         result = (
             client.table("apps")
-            .select("id,user_id,name,description,api_key,created_at,updated_at")
+            .select("id,user_id,name,description,url,api_key,created_at,updated_at")
             .eq("id", app_id)
             .eq("user_id", user_id)
             .single()
@@ -344,6 +354,46 @@ async def rotate_api_key(app_id: str, user_id: str = Depends(get_current_user_id
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.patch("/apps/{app_id}", status_code=200)
+async def update_app(
+    app_id: str,
+    request: UpdateAppRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Update mutable fields (name, description) for an app."""
+    client = _get_supabase()
+    if not client:
+        raise HTTPException(status_code=503, detail="Database not configured")
+    if not verify_app_ownership(app_id, user_id):
+        raise HTTPException(status_code=404, detail="App not found")
+
+    updates: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if request.name is not None:
+        name = request.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name cannot be empty")
+        updates["name"] = name
+    if request.description is not None:
+        updates["description"] = request.description.strip() or None
+    if request.url is not None:
+        updates["url"] = request.url.strip() or None
+
+    try:
+        result = (
+            client.table("apps")
+            .update(updates)
+            .eq("id", app_id)
+            .execute()
+        )
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Update failed")
+        return result.data[0]
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.delete("/apps/{app_id}", status_code=200)
 async def delete_app(app_id: str, user_id: str = Depends(get_current_user_id)):
     """Delete an app (must belong to the authenticated user)."""
@@ -392,6 +442,23 @@ async def get_app_analytics(
     if not verify_app_ownership(app_id, user_id):
         raise HTTPException(status_code=404, detail="App not found")
     return get_analytics(app_id)
+
+
+# ============================================================
+# Anomalies
+# ============================================================
+
+@app.get("/anomalies/{app_id}")
+async def get_app_anomalies(
+    app_id: str,
+    user_id: str = Depends(get_current_user_id),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Return detected anomalies for an app, newest first."""
+    if not verify_app_ownership(app_id, user_id):
+        raise HTTPException(status_code=404, detail="App not found")
+    anomalies = get_anomalies(app_id, limit=limit)
+    return {"anomalies": anomalies}
 
 
 # ============================================================
@@ -491,6 +558,9 @@ async def ingest_logs(
     # Trigger notifications
     notifications = _trigger_risk_notifications(app_id, dashboard)
 
+    # Run anomaly detection in background so ingest stays fast
+    threading.Thread(target=_run_anomaly_detection, args=(app_id,), daemon=True).start()
+
     return {
         "status": "accepted",
         "app_id": app_id,
@@ -499,6 +569,18 @@ async def ingest_logs(
         "notifications_triggered": len(notifications),
         "dashboard_summary": dashboard,
     }
+
+
+def _run_anomaly_detection(app_id: str) -> None:
+    """Fetch recent logs, run all detectors, persist new anomalies. Runs in a daemon thread."""
+    try:
+        logs = get_logs_since(app_id, minutes=90, limit=1000)
+        if logs:
+            found = detect_anomalies(logs)
+            if found:
+                save_anomalies(app_id, found)
+    except Exception:
+        pass
 
 
 # ============================================================
@@ -809,6 +891,21 @@ async def chat_with_logs(
     logs = get_logs_paginated(app_id, limit=300, offset=0)
     context = _build_log_context(logs)
 
+    # Include recent anomalies so the AI already knows what was auto-detected
+    recent_anomalies = get_anomalies(app_id, limit=10)
+    anomaly_context = ""
+    if recent_anomalies:
+        lines = []
+        for a in recent_anomalies:
+            lines.append(
+                f"[{a['severity'].upper()}] {a['type']} — {a['title']}: {a['summary']}"
+            )
+        anomaly_context = (
+            f"\nAUTO-DETECTED ANOMALIES (last 24 h, newest first):\n"
+            + "\n".join(lines)
+            + "\n"
+        )
+
     system_prompt = (
         "You are an expert log analysis assistant embedded in a production monitoring platform.\n"
         "Always format your responses in Markdown:\n"
@@ -818,13 +915,15 @@ async def chat_with_logs(
         "- Use bullet lists for multiple points.\n"
         "- Keep responses focused and actionable — developers are in the middle of incidents.\n\n"
         f"RECENT LOGS ({len(logs)} entries, grouped by service):\n"
-        f"{context}\n\n"
+        f"{context}\n"
+        f"{anomaly_context}\n"
         "When answering:\n"
         "1. Cite specific log lines with their timestamps.\n"
         "2. Identify cascading failures — which service triggered what.\n"
         "3. Give the root cause, not just symptoms.\n"
         "4. Suggest concrete fixes (code-level where possible).\n"
-        "5. If logs are insufficient, say so and suggest what to add."
+        "5. Reference auto-detected anomalies if they are relevant.\n"
+        "6. If logs are insufficient, say so and suggest what to add."
     )
 
     contents = []

@@ -1,6 +1,6 @@
 """
 Supabase helpers: API key resolution, user management, log storage,
-summary storage, and SDK device-code provisioning.
+summary storage, SDK device-code provisioning, and anomaly persistence.
 """
 import os
 import secrets
@@ -559,3 +559,95 @@ def validate_sdk_schema() -> dict:
         "checks": checks,
         "guidance": guidance,
     }
+
+
+# ============================================================
+# Anomaly persistence
+# ============================================================
+
+def get_logs_since(app_id: str, minutes: int = 90, limit: int = 1000) -> list:
+    """Return logs from the last N minutes, oldest first (for temporal analysis)."""
+    client = _get_supabase()
+    if not client:
+        return []
+    since = (_now_utc() - timedelta(minutes=minutes)).isoformat()
+    try:
+        result = (
+            client.table("logs")
+            .select("level,message,service,logged_at")
+            .eq("app_id", app_id)
+            .gte("logged_at", since)
+            .order("logged_at", desc=False)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+    except Exception:
+        return []
+
+
+def save_anomalies(app_id: str, anomalies: list) -> int:
+    """
+    Insert detected anomalies with a 15-min cooldown per type to avoid alert spam.
+    Returns count inserted.
+    """
+    client = _get_supabase()
+    if not client or not anomalies:
+        return 0
+
+    # Find types already detected in the cooldown window
+    cooldown_since = (_now_utc() - timedelta(minutes=15)).isoformat()
+    try:
+        recent = (
+            client.table("anomalies")
+            .select("type")
+            .eq("app_id", app_id)
+            .gte("detected_at", cooldown_since)
+            .execute()
+        )
+        recent_types = {r["type"] for r in (recent.data or [])}
+    except Exception:
+        recent_types = set()
+
+    new = [a for a in anomalies if a["type"] not in recent_types]
+    if not new:
+        return 0
+
+    now_iso = _now_utc().isoformat()
+    rows = [
+        {
+            "app_id":            app_id,
+            "detected_at":       now_iso,
+            "type":              a["type"],
+            "severity":          a["severity"],
+            "title":             a["title"],
+            "summary":           a["summary"],
+            "services_affected": a.get("services_affected", []),
+            "evidence":          a.get("evidence", {}),
+        }
+        for a in new
+    ]
+    try:
+        client.table("anomalies").insert(rows).execute()
+        return len(rows)
+    except Exception:
+        return 0
+
+
+def get_anomalies(app_id: str, limit: int = 50) -> list:
+    """Return recent anomalies for an app, newest first."""
+    client = _get_supabase()
+    if not client:
+        return []
+    try:
+        result = (
+            client.table("anomalies")
+            .select("id,detected_at,type,severity,title,summary,services_affected,evidence")
+            .eq("app_id", app_id)
+            .order("detected_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+    except Exception:
+        return []
