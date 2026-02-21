@@ -60,8 +60,8 @@ app.add_middleware(
 # Config
 # ============================================================
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
-GROQ_CHAT_MODEL = "llama-3.3-70b-versatile"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+GEMINI_CHAT_MODEL = "gemini-1.5-flash"
 
 RISK_ALERT_WEBHOOK_URL = os.environ.get("RISK_ALERT_WEBHOOK_URL", "").strip()
 NOTIFICATION_COOLDOWN_SECONDS = int(os.environ.get("NOTIFICATION_COOLDOWN_SECONDS", "300"))
@@ -779,10 +779,10 @@ async def chat_with_logs(
     """Natural-language Q&A over the app's recent logs using Groq LLM."""
     if not verify_app_ownership(app_id, user_id):
         raise HTTPException(status_code=404, detail="App not found")
-    if not GROQ_API_KEY:
+    if not GEMINI_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="Chat is not configured — add GROQ_API_KEY to your backend environment.",
+            detail="Chat is not configured — add GEMINI_API_KEY to your backend environment.",
         )
 
     logs = get_logs_paginated(app_id, limit=300, offset=0)
@@ -802,22 +802,24 @@ async def chat_with_logs(
         "- Be concise — developers are in the middle of an incident."
     )
 
-    messages = [{"role": "system", "content": system_prompt}]
+    # Gemini uses "model" for assistant role, and history is separate from the message
+    history = []
     for h in (request.history or []):
-        if h.role in ("user", "assistant"):
-            messages.append({"role": h.role, "content": h.content})
-    messages.append({"role": "user", "content": request.message})
+        if h.role == "user":
+            history.append({"role": "user", "parts": [h.content]})
+        elif h.role == "assistant":
+            history.append({"role": "model", "parts": [h.content]})
 
     try:
-        from groq import Groq as GroqClient
-        client = GroqClient(api_key=GROQ_API_KEY)
-        completion = client.chat.completions.create(
-            model=GROQ_CHAT_MODEL,
-            messages=messages,
-            max_tokens=1500,
-            temperature=0.2,
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel(
+            model_name=GEMINI_CHAT_MODEL,
+            system_instruction=system_prompt,
         )
-        answer = completion.choices[0].message.content
+        chat = model.start_chat(history=history)
+        response = chat.send_message(request.message)
+        answer = response.text
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Chat failed: {exc!r}")
 
