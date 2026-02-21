@@ -1,5 +1,5 @@
 # FastAPI Backend Dependencies
-google-genai
+# Gemini accessed via REST API (urllib) — no SDK needed, avoids httpx conflict
 fastapi==0.104.1
 uvicorn==0.24.0
 websockets==12.0

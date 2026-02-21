@@ -826,27 +826,35 @@ async def chat_with_logs(
         "5. If logs are insufficient, say so and suggest what to add."
     )
 
-    # Build Gemini history from stored messages (role: user → user, assistant → model)
-    gemini_history = []
+    # Build conversation contents for Gemini REST API
+    # History: prior turns, then the new user message at the end
+    contents = []
     for msg in stored:
         role = "model" if msg.get("role") == "assistant" else "user"
-        gemini_history.append({"role": role, "parts": [{"text": msg.get("content", "")}]})
+        contents.append({"role": role, "parts": [{"text": msg.get("content", "")}]})
+    contents.append({"role": "user", "parts": [{"text": request.message}]})
+
+    payload = {
+        "system_instruction": {"parts": [{"text": system_prompt}]},
+        "contents": contents,
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1500},
+    }
 
     try:
-        from google import genai
-        from google.genai import types as genai_types
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        chat = client.chats.create(
-            model=GEMINI_CHAT_MODEL,
-            config=genai_types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.2,
-                max_output_tokens=1500,
-            ),
-            history=gemini_history,
+        gemini_url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{GEMINI_CHAT_MODEL}:generateContent?key={GEMINI_API_KEY}"
         )
-        response = chat.send_message(request.message)
-        answer = response.text
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            gemini_url,
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        answer = result["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Chat failed: {exc!r}")
 
