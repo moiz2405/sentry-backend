@@ -44,7 +44,28 @@ from app.core.api_key import (
 )
 from app.models.anomaly_detector import detect_anomalies
 
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+# Initialize generic tracing
+resource = Resource(attributes={
+    SERVICE_NAME: "sentry-backend"
+})
+provider = TracerProvider(resource=resource)
+# Using HTTP exporter natively supported by OTEL collector on 4318
+processor = BatchSpanProcessor(OTLPSpanExporter(endpoint="http://otel-collector:4318/v1/traces"))
+provider.add_span_processor(processor)
+trace.set_tracer_provider(provider)
+
+
 app = FastAPI(title="Sentry Log Platform API")
+
+# Instrument the FastAPI app
+FastAPIInstrumentor.instrument_app(app)
 
 # ============================================================
 # CORS
@@ -1259,6 +1280,107 @@ def _trigger_risk_notifications(app_id: str, dashboard: dict) -> list[dict]:
         app_state[service] = {"last_sent_ts": now_epoch, "last_score": score, "last_level": level}
 
     return triggered
+
+
+# ============================================================
+# Session Replay (Browser DOM recording via rrweb)
+# ============================================================
+
+REPLAY_SESSIONS_DIR = os.path.join(os.path.dirname(__file__), "replay_sessions")
+
+
+class ReplayIngestRequest(BaseModel):
+    app_id: str
+    session_id: str
+    events: List[dict]
+    timestamp: Optional[int] = None
+
+
+@app.post("/ingest/replay", status_code=202)
+async def ingest_replay(request: ReplayIngestRequest):
+    """
+    Accept a batch of rrweb DOM mutation events from the Browser Replay SDK.
+    Events are appended to a per-session NDJSON file (one event JSON per line)
+    so that the file can be streamed back incrementally to the player.
+    """
+    os.makedirs(REPLAY_SESSIONS_DIR, exist_ok=True)
+    session_file = os.path.join(REPLAY_SESSIONS_DIR, f"{request.session_id}.json")
+
+    # Load existing events or start fresh
+    existing: list = []
+    if os.path.exists(session_file):
+        try:
+            with open(session_file, "r") as f:
+                existing = json.load(f)
+        except Exception:
+            existing = []
+
+    # Append fresh events and write back
+    existing.extend(request.events)
+    with open(session_file, "w") as f:
+        json.dump(existing, f)
+
+    # Keep a manifest of all sessions per app_id for the listing endpoint
+    manifest_file = os.path.join(REPLAY_SESSIONS_DIR, f"{request.app_id}_sessions.json")
+    manifest: list = []
+    if os.path.exists(manifest_file):
+        try:
+            with open(manifest_file, "r") as f:
+                manifest = json.load(f)
+        except Exception:
+            manifest = []
+
+    # Upsert this session entry in the manifest
+    ids_in_manifest = {s["session_id"] for s in manifest}
+    if request.session_id not in ids_in_manifest:
+        manifest.append({
+            "session_id": request.session_id,
+            "app_id": request.app_id,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "event_count": len(existing),
+        })
+    else:
+        for s in manifest:
+            if s["session_id"] == request.session_id:
+                s["event_count"] = len(existing)
+
+    with open(manifest_file, "w") as f:
+        json.dump(manifest, f)
+
+    return {
+        "status": "accepted",
+        "session_id": request.session_id,
+        "events_stored": len(existing),
+    }
+
+
+@app.get("/replay/{app_id}/sessions")
+async def list_replay_sessions(app_id: str, user_id: str = Depends(get_current_user_id)):
+    """Return a list of recorded sessions for an app."""
+    if not verify_app_ownership(app_id, user_id):
+        raise HTTPException(status_code=404, detail="App not found")
+    manifest_file = os.path.join(REPLAY_SESSIONS_DIR, f"{app_id}_sessions.json")
+    if not os.path.exists(manifest_file):
+        return {"sessions": []}
+    with open(manifest_file, "r") as f:
+        return {"sessions": json.load(f)}
+
+
+@app.get("/replay/{app_id}/sessions/{session_id}")
+async def get_replay_events(
+    app_id: str,
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Return all rrweb events for a given session so the player can render a video."""
+    if not verify_app_ownership(app_id, user_id):
+        raise HTTPException(status_code=404, detail="App not found")
+    session_file = os.path.join(REPLAY_SESSIONS_DIR, f"{session_id}.json")
+    if not os.path.exists(session_file):
+        raise HTTPException(status_code=404, detail="Session not found")
+    with open(session_file, "r") as f:
+        events = json.load(f)
+    return {"session_id": session_id, "events": events, "event_count": len(events)}
 
 
 # ============================================================
