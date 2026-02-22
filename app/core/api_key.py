@@ -8,6 +8,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 try:
+    from app.core.clickhouse import get_clickhouse_client
+except Exception:
+    get_clickhouse_client = None
+
+try:
     from supabase import create_client, Client
 except ImportError:
     Client = None
@@ -220,12 +225,45 @@ def clear_app_chat(app_id: str) -> bool:
 
 def bulk_insert_logs(parsed_logs: list[dict]) -> int:
     """
-    Bulk insert a list of parsed log dicts into the logs table.
+    Bulk insert a list of parsed log dicts into the logs table and ClickHouse.
     Returns the count of inserted rows.
     """
     client = _get_supabase()
     if not client or not parsed_logs:
         return 0
+
+    # 1. Insert into ClickHouse
+    if get_clickhouse_client:
+        try:
+            ch_client = get_clickhouse_client()
+            ch_data = []
+            for log in parsed_logs:
+                # Map to otel_logs schema
+                timestamp = datetime.fromisoformat(log.get("logged_at", _now_utc().isoformat()).replace("Z", "+00:00"))
+                severity_text = log.get("level", "INFO").upper()
+                severity_num = 9 if severity_text == "INFO" else 13 if severity_text == "WARNING" else 17 if severity_text == "ERROR" else 21 if severity_text == "CRITICAL" else 5
+                
+                ch_data.append([
+                    timestamp,
+                    "", # TraceId (we don't have it yet for these basic logs)
+                    "", # SpanId
+                    severity_text,
+                    severity_num,
+                    log.get("service") or "unknown",
+                    log.get("message", ""),
+                    {"app_id": log.get("app_id", "")},
+                    {"raw": log.get("raw", "")[:255]} # Truncate raw log attribute
+                ])
+                
+            ch_client.insert(
+                "otel_logs", 
+                ch_data, 
+                column_names=["Timestamp", "TraceId", "SpanId", "SeverityText", "SeverityNumber", "ServiceName", "Body", "ResourceAttributes", "LogAttributes"]
+            )
+        except Exception as e:
+            print(f"[ClickHouse] Failed to bulk insert logs: {e}")
+
+    # 2. Insert into Supabase (Legacy support)
     try:
         result = client.table("logs").insert(parsed_logs).execute()
         return len(result.data) if result.data else 0
