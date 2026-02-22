@@ -1,0 +1,135 @@
+name: backend
+services:
+  clickhouse:
+    container_name: sentry-clickhouse
+    environment:
+      CLICKHOUSE_DB: otel
+      CLICKHOUSE_PASSWORD: clickhouse_password
+      CLICKHOUSE_USER: default
+    image: clickhouse/clickhouse-server:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8123
+        published: "8123"
+        protocol: tcp
+      - mode: ingress
+        target: 9000
+        published: "9000"
+        protocol: tcp
+    volumes:
+      - type: volume
+        source: clickhouse-data
+        target: /var/lib/clickhouse
+        volume: {}
+  jaeger:
+    container_name: sentry-jaeger
+    image: jaegertracing/all-in-one:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 16686
+        published: "16686"
+        protocol: tcp
+      - mode: ingress
+        target: 4317
+        published: "4317"
+        protocol: tcp
+  otel-collector:
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    container_name: sentry-otel-collector
+    depends_on:
+      clickhouse:
+        condition: service_started
+        required: true
+      jaeger:
+        condition: service_started
+        required: true
+      prometheus:
+        condition: service_started
+        required: true
+    image: otel/opentelemetry-collector-contrib:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 4318
+        published: "4318"
+        protocol: tcp
+      - mode: ingress
+        target: 8889
+        published: "8889"
+        protocol: tcp
+    restart: always
+    volumes:
+      - type: bind
+        source: D:\projects\sentry\backend\docker\otel-collector-config.yaml
+        target: /etc/otelcol-contrib/config.yaml
+        bind: {}
+  prometheus:
+    container_name: sentry-prometheus
+    image: prom/prometheus:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 9090
+        published: "9090"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: D:\projects\sentry\backend\docker\prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        bind: {}
+  sentry-backend:
+    build:
+      context: D:\projects\sentry\backend
+      dockerfile: Dockerfile
+    container_name: sentry-backend
+    depends_on:
+      clickhouse:
+        condition: service_started
+        required: true
+      jaeger:
+        condition: service_started
+        required: true
+      otel-collector:
+        condition: service_started
+        required: true
+    environment:
+      CLICKHOUSE_PASSWORD: clickhouse_password
+      CORS_ALLOWED_ORIGINS: http://localhost:3001,http://localhost:3000,https://sentrylabs.live,https://www.sentrylabs.live
+      EMAIL_ALERT_FROM: alerts@sentrylabs.live
+      GEMINI_API_KEY: AIzaSyBQuXZ_axvEBn4C7QoI83UKsvJNYhB0BQM
+      NOTIFICATION_COOLDOWN_SECONDS: "300"
+      PYTHONUNBUFFERED: "1"
+      RESEND_API_KEY: re_MF9PFBLW_4CSqq4TGry9oL7fKjZjxHwm6
+      SDK_DEFAULT_DSN: http://localhost:9000
+      SDK_SCHEMA_STRICT_STARTUP: "false"
+      SDK_VERIFICATION_BASE_URL: http://localhost:3001
+      SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxcGJ2b3N5eGxldnR5YWFwcmFkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTQ4Mzg5MiwiZXhwIjoyMDg3MDU5ODkyfQ.0y51enoBHM5xrp8RcxHViGf5R2YerTCtJqlcAqqkP0c
+      SUPABASE_URL: https://tqpbvosyxlevtyaaprad.supabase.co
+      TELEGRAM_BOT_TOKEN: 8400023930:AAGlRgf9aWXG2zCvOY5SlzSai7aCepTROFw
+      TELEGRAM_CHAT_ID: "5420419420"
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8002
+        published: "8002"
+        protocol: tcp
+    restart: always
+    volumes:
+      - type: bind
+        source: D:\projects\sentry\backend
+        target: /app
+        bind: {}
+networks:
+  default:
+    name: sentry-network
+volumes:
+  clickhouse-data:
+    name: backend_clickhouse-data
